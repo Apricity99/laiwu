@@ -17,7 +17,7 @@ public class SystemController {
     public Map<String, Object> health() {
         return Map.of(
                 "status", "UP",
-                "service", "prototype-backend",
+                "service", "laiwu-backend",
                 "message", "Java 后端骨架服务已启动"
         );
     }

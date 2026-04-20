@@ -25,7 +25,7 @@ public class AlgorithmGatewayService {
         } catch (RestClientException ex) {
             return Map.of(
                     "status", "DOWN",
-                    "service", "prototype-algorithm",
+                    "service", "laiwu-algorithm",
                     "message", "算法服务未连通，当前为后端骨架预留接口"
             );
         }

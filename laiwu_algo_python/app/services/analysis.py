@@ -236,7 +236,7 @@ def _station_portraits(station_ids: list[str], segments: list[dict], station_for
 def health_payload() -> dict:
     return {
         "status": "UP",
-        "service": "prototype-algorithm",
+        "service": "laiwu-algorithm",
         "generatedAt": _now(),
         "modules": ["loadProfile", "userProfile", "flexibility", "forecast"],
     }

@@ -14,7 +14,7 @@ from app.services.analysis import (
     summarize_load_profile,
 )
 
-router = APIRouter(prefix="/api", tags=["prototype-algorithm"])
+router = APIRouter(prefix="/api", tags=["laiwu-algorithm"])
 
 
 @router.get("/health")

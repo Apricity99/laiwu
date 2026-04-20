@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>com.laiwu.heavytruck</groupId>
-    <artifactId>prototype-backend</artifactId>
+    <artifactId>laiwu-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>prototype-backend</name>
-    <description>莱芜重卡充电运营分析原型系统后端骨架</description>
+    <name>laiwu-backend</name>
+    <description>莱芜重卡充电运营分析 laiwu 后端骨架</description>
 
     <properties>
         <java.version>21</java.version>

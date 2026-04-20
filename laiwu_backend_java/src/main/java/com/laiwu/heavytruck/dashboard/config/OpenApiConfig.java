@@ -9,10 +9,10 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     @Bean
-    public OpenAPI prototypeOpenApi() {
+    public OpenAPI laiwuOpenApi() {
         return new OpenAPI().info(
                 new Info()
-                        .title("莱芜重卡充电运营分析原型系统 API")
+                        .title("莱芜重卡充电运营分析 laiwu API")
                         .version("0.1.0")
                         .description("包含场景数据接口、算法网关接口和系统健康检查接口")
         );

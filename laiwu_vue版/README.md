@@ -1,4 +1,4 @@
-# 莱芜重卡充电运营分析原型系统
+# 莱芜重卡充电运营分析 laiwu
 
 基于以下技术栈搭建的框架版前端原型：
 
@@ -11,7 +11,7 @@
 ## 目录说明
 
 - `src/data/dashboard.js`
-  - 原型系统模拟数据、模块定义、地图专题数据
+  - laiwu 模拟数据、模块定义、地图专题数据
 - `src/stores/dashboard.js`
   - 全局场景状态管理
 - `src/router/index.js`

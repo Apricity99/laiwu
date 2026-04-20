@@ -1,0 +1,26 @@
+.DS_Store
+
+# Frontend
+原型系统_vue版/node_modules/
+原型系统_vue版/dist/
+原型系统_vue版/.idea/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Java
+原型系统_backend_java/target/
+
+# Office and package artifacts not needed for system repo
+*.docx
+*.xlsx
+*.zip
+*.pptx
+~$*
+
+# Local temp files
+*.log

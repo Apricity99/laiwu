@@ -18,6 +18,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  tertiary: {
+    type: Array,
+    default: () => []
+  },
   primaryName: {
     type: String,
     default: "当前值"
@@ -25,6 +29,10 @@ const props = defineProps({
   secondaryName: {
     type: String,
     default: "对比值"
+  },
+  tertiaryName: {
+    type: String,
+    default: "阈值曲线"
   },
   smooth: {
     type: [Boolean, Number],
@@ -49,9 +57,7 @@ let chart;
 
 function renderChart() {
   if (!chartRef.value) return;
-  if (!chart) {
-    chart = echarts.init(chartRef.value);
-  }
+  if (!chart) chart = echarts.init(chartRef.value);
 
   chart.setOption({
     backgroundColor: "transparent",
@@ -101,15 +107,26 @@ function renderChart() {
               itemStyle: { color: "#7aa9ff" }
             }
           ]
+        : []),
+      ...(props.tertiary.length
+        ? [
+            {
+              name: props.tertiaryName,
+              type: "line",
+              smooth: props.smooth,
+              data: props.tertiary,
+              symbolSize: 5,
+              lineStyle: { width: 2, color: "#e5a623" },
+              itemStyle: { color: "#e5a623" }
+            }
+          ]
         : [])
     ]
   });
 }
 
 function handleResize() {
-  if (chart) {
-    chart.resize();
-  }
+  if (chart) chart.resize();
 }
 
 onMounted(() => {
@@ -117,13 +134,11 @@ onMounted(() => {
   window.addEventListener("resize", handleResize);
 });
 
-watch(() => [props.labels, props.primary, props.secondary], renderChart, { deep: true });
+watch(() => [props.labels, props.primary, props.secondary, props.tertiary], renderChart, { deep: true });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
-  if (chart) {
-    chart.dispose();
-  }
+  if (chart) chart.dispose();
 });
 </script>
 

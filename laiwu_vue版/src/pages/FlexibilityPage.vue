@@ -98,7 +98,6 @@ const text = {
   periodType: "时段类型",
   periodRange: "时间范围",
   mockPrice: "模拟电价",
-  mockFactor: "模拟收益系数",
   peakBenefit: "峰时压降收益",
   shiftBenefit: "平谷转移收益",
   serviceCost: "服务保障成本",
@@ -143,6 +142,16 @@ const chartMap = new Map();
 
 // 当前操作员设定的目标限峰值，页面所有摘要指标和仿真图都由它联动。
 const limitPower = ref(7.0);
+const sliderHovering = ref(false);
+
+function updateLimitPower(rawValue) {
+  const nextValue = Number(rawValue);
+  if (Number.isNaN(nextValue)) return;
+  limitPower.value = round(
+      Math.min(stationInfo.value.ratedPower, Math.max(stationInfo.value.minimumGuarantee, nextValue)),
+      2
+  );
+}
 // 仿真图区的展示模式：展示调控前、调控后或两者同时展示。
 const simulationMode = ref("both");
 
@@ -362,10 +371,12 @@ function buildControlledForecast(limitMw) {
 }
 
 const pageState = computed(() => {
-  // 百分比按“高于最低保障功率的新增部分”来算，便于操作员理解当前放开的力度。
-  const percentage = round(
-      ((limitPower.value - stationInfo.value.minimumGuarantee) / (stationInfo.value.contractUpper - stationInfo.value.minimumGuarantee)) * 100,
-      0
+  // 百分比按“相对最低保障功率提升了多少”来算，便于操作员理解当前放开的力度。
+  const growthFromMinimumPercent = round(
+      stationInfo.value.minimumGuarantee > 0
+          ? ((limitPower.value - stationInfo.value.minimumGuarantee) / stationInfo.value.minimumGuarantee) * 100
+          : 0,
+      1
   );
 
   const currentAvailable = round(historyAvailable.value[historyAvailable.value.length - 1] ?? 7.12, 2);
@@ -486,7 +497,18 @@ const pageState = computed(() => {
   const simulationMinimumLine = simulationTimeline.value.map(() => stationInfo.value.minimumGuarantee);
   const simulationMaximumLine = simulationTimeline.value.map(() => stationInfo.value.ratedPower);
   const recommendedLimitMin = round(Math.max(stationInfo.value.minimumGuarantee, currentAvailable - 0.3), 2);
-  const recommendedLimitMax = round(Math.min(stationInfo.value.ratedPower, currentAvailable + 0.4), 2);
+  const recommendedLimitMax = Math.max(
+      recommendedLimitMin,
+      round(Math.min(stationInfo.value.ratedPower, currentAvailable + 0.4), 2)
+  );
+  const sliderMinPercent = round((stationInfo.value.minimumGuarantee / stationInfo.value.ratedPower) * 100, 2);
+  const sliderValuePercent = round((limitPower.value / stationInfo.value.ratedPower) * 100, 2);
+  const sliderRecommendedLeftPercent = round((recommendedLimitMin / stationInfo.value.ratedPower) * 100, 2);
+  const sliderRecommendedWidthPercent = round(
+      ((recommendedLimitMax - recommendedLimitMin) / stationInfo.value.ratedPower) * 100,
+      2
+  );
+  const sliderRecommendedRightPercent = round(sliderRecommendedLeftPercent + sliderRecommendedWidthPercent, 2);
 
   const futureWindowIndexes = simulationTimeline.value.map((_, index) => index).filter((index) => index >= 4);
   const beforeCapacityMarginList = futureWindowIndexes.map((index) =>
@@ -504,7 +526,12 @@ const pageState = computed(() => {
   const simulationConclusion = `当前策略可将未来峰值由 ${beforePeak.toFixed(2)} MW 压降至 ${afterPeak.toFixed(2)} MW，越限风险由“${beforeOverSlots > 0 ? "存在" : "不存在"}”变为“${afterOverSlots > 0 ? "仍存在" : "解除"}”。`;
 
   return {
-    percentage,
+    growthFromMinimumPercent,
+    sliderMinPercent,
+    sliderValuePercent,
+    sliderRecommendedLeftPercent,
+    sliderRecommendedWidthPercent,
+    sliderRecommendedRightPercent,
     targetLineHistory,
     controlledForecast,
     currentAvailable,
@@ -648,8 +675,8 @@ function renderHistoryChart() {
         data: pageState.value.targetLineHistory,
         symbol: "triangle",
         symbolSize: 7,
-        lineStyle: { width: 3.4, color: "#8d6adf", type: "solid" },
-        itemStyle: { color: "#8d6adf", borderColor: "#ffffff", borderWidth: 2 },
+        lineStyle: { width: 3.4, color: "#de8d36", type: "solid" },
+        itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
         markLine: {
           silent: true,
           symbol: ["none", "none"],
@@ -682,12 +709,16 @@ function renderSimulationChart() {
   const currentTime = simulationCurrentTimeLabel.value;
   const series = [
     {
-      name: text.maxPowerLine,
+      name: "simulationOverlay",
       type: "line",
       smooth: false,
       data: pageState.value.simulationMaximumLine,
       symbol: "none",
-      lineStyle: { width: 2.4, color: "#d56b3d", type: "solid" },
+      silent: true,
+      tooltip: { show: false },
+      lineStyle: { width: 0, opacity: 0 },
+      itemStyle: { opacity: 0 },
+      emphasis: { disabled: true },
       markArea: {
         silent: true,
         label: {
@@ -703,7 +734,7 @@ function renderSimulationChart() {
               name: "历史区",
               xAxis: simulationTimeline.value[0],
               yAxis: stationInfo.value.minimumGuarantee,
-              itemStyle: { color: "rgba(74, 124, 214, 0.07)" }
+              itemStyle: { color: "rgba(74, 124, 214, 0.08)" }
             },
             { xAxis: currentTime, yAxis: stationInfo.value.ratedPower }
           ],
@@ -712,7 +743,7 @@ function renderSimulationChart() {
               name: "未来区",
               xAxis: currentTime,
               yAxis: stationInfo.value.minimumGuarantee,
-              itemStyle: { color: "rgba(223, 154, 50, 0.08)" }
+              itemStyle: { color: "rgba(223, 154, 50, 0.1)" }
             },
             { xAxis: simulationTimeline.value[simulationTimeline.value.length - 1], yAxis: stationInfo.value.ratedPower }
           ]
@@ -734,7 +765,16 @@ ${currentTime}`,
         },
         data: [{ xAxis: currentTime }]
       },
-      z: 2
+      z: 1
+    },
+    {
+      name: text.maxPowerLine,
+      type: "line",
+      smooth: false,
+      data: pageState.value.simulationMaximumLine,
+      symbol: "none",
+      lineStyle: { width: 2.4, color: "#d56b3d", type: "solid" },
+      z: 3
     },
     {
       name: text.minGuaranteeLine,
@@ -752,8 +792,8 @@ ${currentTime}`,
       data: simulationHistoryActual.value,
       symbol: "circle",
       symbolSize: 8,
-      lineStyle: { width: 3.6, color: "#2f6bff", type: "solid" },
-      itemStyle: { color: "#2f6bff", borderColor: "#ffffff", borderWidth: 2 },
+      lineStyle: { width: 3.6, color: "#245dff", type: "solid" },
+      itemStyle: { color: "#245dff", borderColor: "#ffffff", borderWidth: 2 },
       z: 4
     },
     {
@@ -774,8 +814,8 @@ ${currentTime}`,
       data: simulationHistoryTarget.value,
       symbol: "triangle",
       symbolSize: 8,
-      lineStyle: { width: 3, color: "#df9a32", type: "dashdot" },
-      itemStyle: { color: "#df9a32", borderColor: "#ffffff", borderWidth: 2 },
+      lineStyle: { width: 3.2, color: "#de8d36", type: "solid" },
+      itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
       z: 4
     },
     {
@@ -798,7 +838,7 @@ ${currentTime}`,
       smooth: false,
       data: pageState.value.simulationTargetBeforeSeries,
       symbol: "none",
-      lineStyle: { width: 2.4, color: "#d98937", type: "dotted" },
+      lineStyle: { width: 2.6, color: "#f0ad57", type: "dashed" },
       z: 5
     });
     series.push({
@@ -808,8 +848,8 @@ ${currentTime}`,
       data: uncontrolledForecast.value,
       symbol: "emptyCircle",
       symbolSize: 7,
-      lineStyle: { width: 3.4, color: "#87a5d6", type: "solid" },
-      itemStyle: { color: "#ffffff", borderColor: "#87a5d6", borderWidth: 2 },
+      lineStyle: { width: 3.4, color: "#84a9ff", type: "dashed" },
+      itemStyle: { color: "#ffffff", borderColor: "#84a9ff", borderWidth: 2 },
       z: 6
     });
   }
@@ -821,7 +861,7 @@ ${currentTime}`,
       smooth: false,
       data: pageState.value.simulationTargetAfterSeries,
       symbol: "none",
-      lineStyle: { width: 2.4, color: "#2f8f67", type: "dotted" },
+      lineStyle: { width: 2.6, color: "#c8781c", type: "dotted" },
       z: 5
     });
     series.push({
@@ -831,8 +871,8 @@ ${currentTime}`,
       data: pageState.value.controlledForecast,
       symbol: "rect",
       symbolSize: 8,
-      lineStyle: { width: 3.6, color: "#1f7d59", type: "solid" },
-      itemStyle: { color: "#1f7d59", borderColor: "#ffffff", borderWidth: 2 },
+      lineStyle: { width: 3.6, color: "#3d78f4", type: "solid" },
+      itemStyle: { color: "#3d78f4", borderColor: "#ffffff", borderWidth: 2 },
       z: 6
     });
   }
@@ -1188,25 +1228,86 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="range-card simulation-range-card" style="margin-top:14px;">
-          <header>
+          <header class="sim-slider-header">
             <span>{{ text.simSliderTitle }}</span>
-            <strong>{{ Number(limitPower).toFixed(2) }} MW</strong>
+            <div class="sim-slider-header-value">
+              <strong>{{ Number(limitPower).toFixed(2) }} MW</strong>
+              <small>较最低保障功率 +{{ pageState.growthFromMinimumPercent.toFixed(1) }}%</small>
+            </div>
           </header>
+          <div class="sim-slider-summary">
+            <div class="sim-slider-summary-item total">
+              <span>{{ "总范围" }}</span>
+              <strong>0 - {{ stationInfo.ratedPower.toFixed(1) }} MW</strong>
+            </div>
+            <div class="sim-slider-summary-item adjustable">
+              <span>{{ "可调区间" }}</span>
+              <strong>{{ stationInfo.minimumGuarantee.toFixed(1) }} - {{ stationInfo.ratedPower.toFixed(1) }} MW</strong>
+            </div>
+            <div class="sim-slider-summary-item recommend">
+              <span>{{ text.recRange }}</span>
+              <strong>{{ pageState.recommendedLimitMin.toFixed(1) }} - {{ pageState.recommendedLimitMax.toFixed(1) }} MW</strong>
+            </div>
+          </div>
           <div class="sim-slider-wrap">
-            <div class="sim-slider-track">
+            <div
+                class="sim-slider-track"
+                @mouseenter="sliderHovering = true"
+                @mouseleave="sliderHovering = false"
+            >
+              <div class="sim-slider-base"></div>
+              <div class="sim-slider-adjustable-zone" :style="{ left: `${pageState.sliderMinPercent}%`, width: `${100 - pageState.sliderMinPercent}%` }"></div>
+              <div class="sim-slider-disabled-zone" :style="{ width: `${pageState.sliderMinPercent}%` }"></div>
+              <div class="sim-slider-fill" :style="{ left: `${pageState.sliderMinPercent}%`, width: `${Math.max(0, pageState.sliderValuePercent - pageState.sliderMinPercent)}%` }"></div>
               <div
                   class="sim-slider-recommend"
                   :style="{
-                  left: `${(pageState.recommendedLimitMin / stationInfo.ratedPower) * 100}%`,
-                  width: `${((pageState.recommendedLimitMax - pageState.recommendedLimitMin) / stationInfo.ratedPower) * 100}%`
+                  left: `${pageState.sliderRecommendedLeftPercent}%`,
+                  width: `${pageState.sliderRecommendedWidthPercent}%`
                 }"
               ></div>
-              <input :value="limitPower" type="range" min="0" :max="stationInfo.ratedPower" :step="0.1" @input="limitPower = Number($event.target.value)" />
+              <div class="sim-slider-boundary minimum" :style="{ left: `${pageState.sliderMinPercent}%` }">
+                <span>{{ text.minimumGuarantee }}</span>
+              </div>
+              <div class="sim-slider-boundary maximum" style="left:100%;">
+                <span>{{ text.maxPowerLine }}</span>
+              </div>
+              <div
+                  v-show="sliderHovering"
+                  class="sim-slider-tooltip"
+                  :style="{ left: `clamp(16px, ${pageState.sliderValuePercent}%, calc(100% - 16px))` }"
+              >
+                <strong>{{ Number(limitPower).toFixed(2) }} MW</strong>
+                <span>较最低保障功率 +{{ pageState.growthFromMinimumPercent.toFixed(1) }}%</span>
+              </div>
+              <input
+                  :value="limitPower"
+                  class="sim-slider-input"
+                  type="range"
+                  :min="stationInfo.minimumGuarantee"
+                  :max="stationInfo.ratedPower"
+                  :step="0.1"
+                  :style="{ left: `${pageState.sliderMinPercent}%`, width: `${100 - pageState.sliderMinPercent}%` }"
+                  @input="updateLimitPower($event.target.value)"
+                  @focus="sliderHovering = true"
+                  @blur="sliderHovering = false"
+                  @mousedown="sliderHovering = true"
+                  @mouseup="sliderHovering = false"
+              />
             </div>
-            <div class="sim-slider-scale">
-              <span>0 MW</span>
-              <span>{{ text.recRange }} {{ pageState.recommendedLimitMin.toFixed(1) }} - {{ pageState.recommendedLimitMax.toFixed(1) }} MW</span>
-              <span>{{ stationInfo.ratedPower.toFixed(1) }} MW</span>
+            <div class="sim-slider-scale sim-slider-scale-major">
+              <span class="sim-slider-scale-mark align-start" style="left:0%;">0 MW</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderMinPercent}%` }">{{ stationInfo.minimumGuarantee.toFixed(1) }} MW</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedLeftPercent}%` }">{{ pageState.recommendedLimitMin.toFixed(1) }} MW</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedRightPercent}%` }">{{ pageState.recommendedLimitMax.toFixed(1) }} MW</span>
+              <span class="sim-slider-scale-mark align-end" style="left:100%;">{{ stationInfo.ratedPower.toFixed(1) }} MW</span>
+            </div>
+            <div class="sim-slider-scale sim-slider-scale-desc">
+              <span class="sim-slider-scale-mark align-start" style="left:0%;">{{ "禁调区" }}</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderMinPercent}%` }">{{ "最低保障点" }}</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedLeftPercent}%` }">{{ "推荐起点" }}</span>
+              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedRightPercent}%` }">{{ "推荐终点" }}</span>
+              <span class="sim-slider-scale-mark align-end" style="left:100%;">{{ "最大功率" }}</span>
             </div>
           </div>
           <div class="muted">{{ text.simSliderDesc }}</div>
@@ -1307,13 +1408,11 @@ onBeforeUnmount(() => {
             <span>{{ text.periodType }}</span>
             <span>{{ text.periodRange }}</span>
             <span>{{ text.mockPrice }}</span>
-            <span>{{ text.mockFactor }}</span>
           </div>
           <div v-for="item in touTable" :key="item.type" class="table-row flex-table">
             <strong>{{ item.type }}</strong>
             <span>{{ item.range }}</span>
             <span>{{ item.price.toFixed(2) }} {{ "元/kWh" }}</span>
-            <span>{{ item.factor.toFixed(2) }}</span>
           </div>
         </div>
       </div>
@@ -1342,7 +1441,7 @@ onBeforeUnmount(() => {
 }
 
 .flex-table {
-  grid-template-columns: 72px minmax(0, 1fr) 118px 96px;
+  grid-template-columns: 72px minmax(0, 1fr) 132px;
 }
 
 .advisory-layout {
@@ -1741,39 +1840,273 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 18px rgba(47, 107, 255, 0.22);
 }
 
-.sim-slider-wrap {
+.sim-slider-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sim-slider-header-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.sim-slider-header-value strong {
+  font-size: 20px;
+  color: #1d3557;
+  line-height: 1;
+}
+
+.sim-slider-header-value small {
+  color: #2f6bff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sim-slider-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin-top: 10px;
+}
+
+.sim-slider-summary-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(200, 212, 228, 0.9);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(240, 245, 252, 0.94));
+}
+
+.sim-slider-summary-item span {
+  display: block;
+  color: #6b7f98;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.sim-slider-summary-item strong {
+  color: #1d3557;
+  font-size: 13px;
+}
+
+.sim-slider-summary-item.adjustable {
+  border-color: rgba(47, 107, 255, 0.22);
+  background: linear-gradient(180deg, rgba(241, 247, 255, 0.98), rgba(229, 239, 255, 0.94));
+}
+
+.sim-slider-summary-item.recommend {
+  border-color: rgba(52, 168, 83, 0.24);
+  background: linear-gradient(180deg, rgba(240, 250, 243, 0.98), rgba(229, 246, 234, 0.95));
+}
+
+.sim-slider-wrap {
+  margin-top: 14px;
 }
 
 .sim-slider-track {
   position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 72px;
+  padding-top: 28px;
 }
 
-.sim-slider-track input[type="range"] {
-  position: relative;
-  width: 100%;
-  margin: 0;
-  background: transparent;
-  z-index: 2;
-}
-
+.sim-slider-base,
+.sim-slider-adjustable-zone,
+.sim-slider-disabled-zone,
+.sim-slider-fill,
 .sim-slider-recommend {
   position: absolute;
   top: 50%;
-  height: 10px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: rgba(93, 167, 116, 0.45);
+  pointer-events: none;
+}
+
+.sim-slider-base {
+  left: 0;
+  right: 0;
+  height: 14px;
+  background: linear-gradient(90deg, rgba(215, 223, 235, 0.95), rgba(196, 207, 223, 0.96));
+  box-shadow: inset 0 1px 3px rgba(93, 108, 133, 0.16);
+}
+
+.sim-slider-adjustable-zone {
+  height: 14px;
+  background: linear-gradient(90deg, rgba(227, 236, 255, 0.9), rgba(214, 229, 255, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(47, 107, 255, 0.08);
+}
+
+.sim-slider-disabled-zone {
+  left: 0;
+  height: 14px;
+  background: repeating-linear-gradient(
+      135deg,
+      rgba(157, 170, 191, 0.28),
+      rgba(157, 170, 191, 0.28) 8px,
+      rgba(203, 211, 223, 0.55) 8px,
+      rgba(203, 211, 223, 0.55) 16px
+  );
+}
+
+.sim-slider-fill {
+  height: 14px;
+  background: linear-gradient(90deg, rgba(83, 145, 255, 0.92), rgba(47, 107, 255, 0.98));
+  box-shadow: 0 0 0 1px rgba(47, 107, 255, 0.12), 0 6px 14px rgba(47, 107, 255, 0.18);
+  z-index: 2;
+}
+
+.sim-slider-track input[type="range"] {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  z-index: 4;
+}
+
+.sim-slider-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 14px;
+  background: transparent;
+}
+
+.sim-slider-track input[type="range"]::-moz-range-track {
+  height: 14px;
+  background: transparent;
+  border: none;
+}
+
+.sim-slider-track input[type="range"]::-webkit-slider-thumb {
+  width: 24px;
+  height: 24px;
+  margin-top: -5px;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #8db6ff, #2f6bff 70%);
+  box-shadow: 0 8px 18px rgba(47, 107, 255, 0.3);
+  cursor: pointer;
+  -webkit-appearance: none;
+}
+
+.sim-slider-track input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 4px solid #ffffff;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #8db6ff, #2f6bff 70%);
+  box-shadow: 0 8px 18px rgba(47, 107, 255, 0.3);
+  cursor: pointer;
+}
+
+.sim-slider-recommend {
+  height: 18px;
+  border: 1px solid rgba(34, 132, 70, 0.42);
+  background: linear-gradient(90deg, rgba(111, 212, 146, 0.86), rgba(41, 153, 84, 0.96));
+  box-shadow: 0 0 0 2px rgba(104, 201, 134, 0.16), 0 6px 14px rgba(45, 154, 87, 0.22);
   z-index: 1;
 }
 
-.sim-slider-scale {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
+.sim-slider-boundary {
+  position: absolute;
+  top: 12px;
+  width: 0;
+  height: 42px;
+  border-left: 1px dashed rgba(107, 127, 152, 0.78);
+  z-index: 1;
+}
+
+.sim-slider-boundary span {
+  position: absolute;
+  top: -20px;
+  transform: translateX(-50%);
+  white-space: nowrap;
   color: #6b7f98;
   font-size: 12px;
+  font-weight: 600;
+}
+
+.sim-slider-tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 132px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(18, 35, 61, 0.94);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(18, 35, 61, 0.24);
+  z-index: 5;
+}
+
+.sim-slider-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  background: rgba(18, 35, 61, 0.94);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sim-slider-tooltip strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.sim-slider-tooltip span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.sim-slider-scale {
+  position: relative;
+  color: #6b7f98;
+  font-size: 12px;
+}
+
+.sim-slider-scale-major {
+  min-height: 18px;
+  margin-top: 12px;
+  font-weight: 600;
+}
+
+.sim-slider-scale-desc {
+  min-height: 18px;
+  margin-top: 6px;
+}
+
+.sim-slider-scale-mark {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.sim-slider-scale-mark.align-start {
+  transform: translateX(0);
+  text-align: left;
+}
+
+.sim-slider-scale-mark.align-center {
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.sim-slider-scale-mark.align-end {
+  transform: translateX(-100%);
+  text-align: right;
 }
 
 .sim-result-panel {
@@ -1987,4 +2320,21 @@ onBeforeUnmount(() => {
     height: auto;
   }
 }
+
+@media (max-width: 900px) {
+  .sim-slider-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-slider-track {
+    min-height: 84px;
+  }
+
+  .sim-slider-scale-major,
+  .sim-slider-scale-desc {
+    grid-template-columns: repeat(5, minmax(56px, 1fr));
+    overflow-x: auto;
+  }
+}
+
 </style>

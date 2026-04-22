@@ -257,17 +257,32 @@ const siteResourceZones = [
 ];
 
 const townshipResourceMappings = {
-  // 示例：
-  // pengquan: [
-  //   {
-  //     id: "pengquan-resource-1",
-  //     name: "鹏泉综合片区10kV资源1号",
-  //     reserveCapacity: "5.5 kV",
-  //     accessMode: "双间隔接入",
-  //     remark: "可支撑片区内两个站点协同接入。",
-  //     stationKeys: ["站点名称A", "站点名称B"]
-  //   }
-  // ]
+  zhangjiawa: [
+    {
+      id: "zhangjiawa-resource-1",
+      name: "张家洼10kV资源1号",
+      reserveCapacity: "7.5 kV",
+      accessMode: "接入充电站一座/10kV",
+      remark: "张家洼莱北充电站使用资源点 1，站点侧两路资源合计 15kV。",
+      stationIds: ["laibei"]
+    },
+    {
+      id: "zhangjiawa-resource-2",
+      name: "张家洼10kV资源2号",
+      reserveCapacity: "7.5 kV",
+      accessMode: "接入充电站一座/10kV",
+      remark: "张家洼莱北充电站使用资源点 2，与资源点 1 合计形成 15kV 站点接入能力。",
+      stationIds: ["laibei"]
+    },
+    {
+      id: "zhangjiawa-resource-3",
+      name: "张家洼10kV资源3号",
+      reserveCapacity: "5.0 kV",
+      accessMode: "民生负荷保障",
+      remark: "该资源点用于民生用电，当前按 5kV 保障，不接入充电站。",
+      connectedLabel: "民生负荷 5kV"
+    }
+  ]
 };
 
 watch(
@@ -463,7 +478,9 @@ const flexibleScenarioInputs = {
   zhangjiawa: {
     totalCapacity: 30,
     otherLoadProtocolMax: 20,
-    otherLoadUsageSeries: [15, 16, 17, 18, 20, 20]
+    otherLoadUsageSeries: [15, 16, 18, 20, 19, 15],
+    stationProtocolMax: 15,
+    stationUsageSeries: [10, 11, 13, 15, 14, 10]
   },
   fangxia: {
     totalCapacity: 30,
@@ -520,9 +537,13 @@ const flexibleControlAreasV2 = computed(() =>
       const stationStrategies = relatedStations.map((station, index) => {
         const weight = weightSeed[index] || 1;
         const share = weight / weightSum;
-        const protocolCapValue = Number(((protocolTotal || totalCapacity * 0.42) * share).toFixed(1));
+        const stationProtocolTotal = scenarioInput.stationProtocolMax ?? protocolTotal;
+        const stationUsageSeriesBase = Array.isArray(scenarioInput.stationUsageSeries) && scenarioInput.stationUsageSeries.length === usageTotalSeries.length
+          ? scenarioInput.stationUsageSeries
+          : usageTotalSeries;
+        const protocolCapValue = Number(((stationProtocolTotal || totalCapacity * 0.42) * share).toFixed(1));
         const stationShortName = station.mapLabel || station.name.replace(/\u5145\u7535\u7ad9/g, "");
-        const usageSeries = usageTotalSeries.map((value) => Number((value * share).toFixed(1)));
+        const usageSeries = stationUsageSeriesBase.map((value) => Number((value * share).toFixed(1)));
 
         return {
           stationId: station.id,

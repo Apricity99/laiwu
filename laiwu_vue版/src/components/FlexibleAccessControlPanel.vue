@@ -70,6 +70,11 @@ const toneConfig = {
 
 const selectedArea = computed(() => props.areas.find((item) => item.key === props.selectedKey) || props.areas[0] || null);
 const resourceZoneNameMap = computed(() => new Map(props.resourceZones.map((item) => [item.name, item])));
+const singleMinAccessWindow = computed(() => {
+  const raw = String(selectedArea.value?.minAccessWindow || "").trim();
+  if (!raw) return "-";
+  return raw.split(/\s*\/\s*|\s*、\s*|\s*,\s*/)[0] || raw;
+});
 
 const summaryMetrics = computed(() => [
   {
@@ -78,7 +83,7 @@ const summaryMetrics = computed(() => [
   },
   {
     label: "最小接入时段",
-    value: selectedArea.value?.minAccessWindow || "-"
+    value: singleMinAccessWindow.value
   },
   {
     label: "最大接入建议",

@@ -263,7 +263,11 @@ const selectedResourceItems = computed(() => {
   const stations = selectedTownshipStations.value;
   const zone = selectedZone.value;
   const explicitMappings = props.resourceMappings[township?.key] || [];
-  const resourceCount = Math.max(zone?.resourceCount || 0, stations.length ? Math.min(Math.max(stations.length, 1), 3) : 1);
+  const resourceCount = Math.max(
+    zone?.resourceCount || 0,
+    explicitMappings.length || 0,
+    stations.length ? Math.min(Math.max(stations.length, 1), 3) : 1
+  );
   const pointList = buildResourcePoints(township?.name, resourceCount);
   const baseName = zone?.resourceName || `${township?.name || ""} 10kV`;
   const stationCount = stations.length;
@@ -288,6 +292,7 @@ const selectedResourceItems = computed(() => {
         accessMode: item.accessMode || zone?.accessMode || "双间隔接入",
         reserveCapacity: item.reserveCapacity || `${Number((parseFloat(zone?.reserveCapacity) || 6) / Math.max(explicitMappings.length, 1)).toFixed(1)} kV`,
         remark: item.remark || zone?.remark || "当前可支撑多站点协同接入。",
+        connectedLabel: item.connectedLabel || connectedStations.map((station) => station.name).join("、") || "暂无",
         value: item.value || pointList[index] || pointList[0],
         connectedStations
       };
@@ -397,9 +402,10 @@ function renderMap() {
         if (params.seriesName === "10kV resource") {
           return [
             `<strong>${params.data.name}</strong>`,
-            `\u63a5\u5165\u5145\u7535\u7ad9\uff1a${params.data.connectedNames || "\u6682\u65e0"}`,
-            `\u53ef\u7528\u5bb9\u91cf\uff1a${params.data.reserveCapacity}`
-          ].join("<br/>");
+            `\u63a5\u5165\u5bf9\u8c61\uff1a${params.data.connectedNames || "\u6682\u65e0"}`,
+            `\u5bb9\u91cf\uff1a${params.data.reserveCapacity}`,
+            params.data.remark ? `\u8bf4\u660e\uff1a${params.data.remark}` : null
+          ].filter(Boolean).join("<br/>");
         }
 
         if (params.seriesName === "resource-link") {
@@ -499,7 +505,7 @@ function renderMap() {
         zlevel: 4,
         data: selectedResourceItems.value.map((item) => ({
           ...item,
-          connectedNames: item.connectedStations.map((station) => station.name).join("\u3001"),
+          connectedNames: item.connectedLabel || item.connectedStations.map((station) => station.name).join("\u3001") || "\u6682\u65e0",
           value: item.value,
           symbolSize: 17,
           itemStyle: {
@@ -636,7 +642,11 @@ onBeforeUnmount(() => {
               </div>
               <div class="resource-station-line">
                 <span class="muted">&#25509;&#20837;&#31449;&#28857;&#65306;</span>
-                <span>{{ item.connectedStations.map((station) => station.name).join("、") || "暂无" }}</span>
+                <span>{{ item.connectedLabel || item.connectedStations.map((station) => station.name).join("、") || "暂无" }}</span>
+              </div>
+              <div v-if="item.remark" class="resource-station-line">
+                <span class="muted">&#35828;&#26126;&#65306;</span>
+                <span>{{ item.remark }}</span>
               </div>
             </div>
           </div>

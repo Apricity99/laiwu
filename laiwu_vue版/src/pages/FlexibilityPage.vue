@@ -1295,20 +1295,20 @@ onBeforeUnmount(() => {
                   @mouseup="sliderHovering = false"
               />
             </div>
-            <div class="sim-slider-scale sim-slider-scale-major">
-              <span class="sim-slider-scale-mark align-start" style="left:0%;">0 MW</span>
+            <div class="sim-slider-scale sim-slider-scale-major" style="margin-top: 0">
+              <span class="sim-slider-scale-mark align-start" style="left:0%;margin-top: 0">0 MW</span>
               <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderMinPercent}%` }">{{ stationInfo.minimumGuarantee.toFixed(1) }} MW</span>
               <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedLeftPercent}%` }">{{ pageState.recommendedLimitMin.toFixed(1) }} MW</span>
               <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedRightPercent}%` }">{{ pageState.recommendedLimitMax.toFixed(1) }} MW</span>
               <span class="sim-slider-scale-mark align-end" style="left:100%;">{{ stationInfo.ratedPower.toFixed(1) }} MW</span>
             </div>
-            <div class="sim-slider-scale sim-slider-scale-desc">
-              <span class="sim-slider-scale-mark align-start" style="left:0%;">{{ "禁调区" }}</span>
-              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderMinPercent}%` }">{{ "最低保障点" }}</span>
-              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedLeftPercent}%` }">{{ "推荐起点" }}</span>
-              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedRightPercent}%` }">{{ "推荐终点" }}</span>
-              <span class="sim-slider-scale-mark align-end" style="left:100%;">{{ "最大功率" }}</span>
-            </div>
+<!--            <div class="sim-slider-scale sim-slider-scale-desc">-->
+<!--              <span class="sim-slider-scale-mark align-start" style="left:0%;">{{ "禁调区" }}</span>-->
+<!--              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderMinPercent}%` }">{{ "最低保障点" }}</span>-->
+<!--              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedLeftPercent}%` }">{{ "推荐起点" }}</span>-->
+<!--              <span class="sim-slider-scale-mark align-center" :style="{ left: `${pageState.sliderRecommendedRightPercent}%` }">{{ "推荐终点" }}</span>-->
+<!--              <span class="sim-slider-scale-mark align-end" style="left:100%;">{{ "最大功率" }}</span>-->
+<!--            </div>-->
           </div>
           <div class="muted">{{ text.simSliderDesc }}</div>
         </div>
@@ -1910,8 +1910,8 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 72px;
-  padding-top: 28px;
+  min-height: 64px;
+  padding-top: 20px;
 }
 
 .sim-slider-base,
@@ -2035,8 +2035,8 @@ onBeforeUnmount(() => {
 
 .sim-slider-tooltip {
   position: absolute;
-  top: 0;
-  transform: translateX(-50%);
+  top: -8px;
+  transform: translate(-50%, -100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2047,6 +2047,7 @@ onBeforeUnmount(() => {
   background: rgba(18, 35, 61, 0.94);
   color: #ffffff;
   box-shadow: 0 10px 24px rgba(18, 35, 61, 0.24);
+  pointer-events: none;
   z-index: 5;
 }
 
@@ -2079,13 +2080,13 @@ onBeforeUnmount(() => {
 
 .sim-slider-scale-major {
   min-height: 18px;
-  margin-top: 12px;
+  margin-top: 6px;
   font-weight: 600;
 }
 
 .sim-slider-scale-desc {
   min-height: 18px;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .sim-slider-scale-mark {

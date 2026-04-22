@@ -160,7 +160,7 @@ const stationInfo = computed(() => {
     ratedPower: stationFallback.ratedPower,
     contractUpper: stationFallback.contractUpper,
     minimumGuarantee: stationFallback.minimumGuarantee,
-    currentTime: currentTimeLabel.value,
+    currentTime: simulationCurrentTimeLabel.value,
     sceneType: sanitizeText(station.sceneType, stationFallback.sceneType),
     distribution: sanitizeText(station.distribution, stationFallback.distribution),
     fast: Number(station.fast || stationFallback.fast),
@@ -305,8 +305,8 @@ function getTouRule(label) {
 }
 
 const dashboardLabels = computed(() => scenario.value?.loadSeries?.labels || []);
-const currentAlignedTime = computed(() => alignToHalfHour(new Date()));
-const currentTimeLabel = computed(() => formatHalfHour(currentAlignedTime.value));
+const simulationCurrentIndex = computed(() => 4);
+const simulationCurrentTimeLabel = computed(() => simulationLabels.value[simulationCurrentIndex.value] || stationFallback.currentTime);
 
 const historyLabels = computed(() =>
     dashboardLabels.value.length ? dashboardLabels.value.slice(4, 15) : historyLabelsFallback
@@ -652,9 +652,19 @@ function renderHistoryChart() {
         itemStyle: { color: "#8d6adf", borderColor: "#ffffff", borderWidth: 2 },
         markLine: {
           silent: true,
-          symbol: "none",
-          lineStyle: { color: "#8ea1b8", type: "dashed" },
-          data: [{ xAxis: historyLabels.value[historyLabels.value.length - 1], label: { formatter: text.currentTime } }]
+          symbol: ["none", "none"],
+          lineStyle: { color: "#8ea1b8", type: "dashed", width: 1.6 },
+          label: {
+            show: true,
+            formatter: `${text.currentTime}
+${historyLabels.value[historyLabels.value.length - 1]}`,
+            position: "insideEndTop",
+            color: "#4f6480",
+            backgroundColor: "rgba(255,255,255,0.92)",
+            padding: [4, 6],
+            borderRadius: 4
+          },
+          data: [{ xAxis: historyLabels.value[historyLabels.value.length - 1] }]
         },
         z: 4
       }
@@ -669,12 +679,7 @@ function renderSimulationChart() {
   const mode = simulationMode.value;
   const showBefore = mode === "both" || mode === "before";
   const showAfter = mode === "both" || mode === "after";
-  const currentIndex = 4;
-  const riskIndexes = simulationTimeline.value
-      .map((_, index) => index)
-      .filter((index) => index >= currentIndex && (uncontrolledForecast.value[index] ?? 0) > (futureAvailable.value[index] ?? Number.MAX_VALUE));
-  const riskStart = riskIndexes.length ? simulationTimeline.value[riskIndexes[0]] : null;
-  const riskEnd = riskIndexes.length ? simulationTimeline.value[riskIndexes[riskIndexes.length - 1]] : null;
+  const currentTime = simulationCurrentTimeLabel.value;
   const series = [
     {
       name: text.maxPowerLine,
@@ -685,11 +690,49 @@ function renderSimulationChart() {
       lineStyle: { width: 2.4, color: "#d56b3d", type: "solid" },
       markArea: {
         silent: true,
-        itemStyle: { color: "rgba(93, 167, 116, 0.08)" },
-        data: [[
-          { xAxis: simulationTimeline.value[0], yAxis: stationInfo.value.minimumGuarantee },
-          { xAxis: simulationTimeline.value[simulationTimeline.value.length - 1], yAxis: stationInfo.value.ratedPower }
-        ]]
+        label: {
+          show: true,
+          position: "insideTop",
+          color: "#5e7088",
+          fontSize: 12,
+          padding: [2, 6]
+        },
+        data: [
+          [
+            {
+              name: "历史区",
+              xAxis: simulationTimeline.value[0],
+              yAxis: stationInfo.value.minimumGuarantee,
+              itemStyle: { color: "rgba(74, 124, 214, 0.07)" }
+            },
+            { xAxis: currentTime, yAxis: stationInfo.value.ratedPower }
+          ],
+          [
+            {
+              name: "未来区",
+              xAxis: currentTime,
+              yAxis: stationInfo.value.minimumGuarantee,
+              itemStyle: { color: "rgba(223, 154, 50, 0.08)" }
+            },
+            { xAxis: simulationTimeline.value[simulationTimeline.value.length - 1], yAxis: stationInfo.value.ratedPower }
+          ]
+        ]
+      },
+      markLine: {
+        silent: true,
+        symbol: ["none", "none"],
+        lineStyle: { color: "#8ea1b8", type: "dashed", width: 1.8 },
+        label: {
+          show: true,
+          formatter: `${text.currentTime}
+${currentTime}`,
+          position: "insideEndTop",
+          color: "#4f6480",
+          backgroundColor: "rgba(255,255,255,0.92)",
+          padding: [4, 6],
+          borderRadius: 4
+        },
+        data: [{ xAxis: currentTime }]
       },
       z: 2
     },
@@ -767,12 +810,6 @@ function renderSimulationChart() {
       symbolSize: 7,
       lineStyle: { width: 3.4, color: "#87a5d6", type: "solid" },
       itemStyle: { color: "#ffffff", borderColor: "#87a5d6", borderWidth: 2 },
-      markArea: riskStart && riskEnd
-          ? {
-            itemStyle: { color: "rgba(223,106,71,0.10)" },
-            data: [[{ xAxis: riskStart }, { xAxis: riskEnd }]]
-          }
-          : undefined,
       z: 6
     });
   }

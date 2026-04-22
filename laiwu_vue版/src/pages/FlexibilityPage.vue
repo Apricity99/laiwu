@@ -24,9 +24,9 @@ const text = {
   sectionHistory: "历史负荷与当前限峰分析",
   sectionHistoryDesc:
       "左侧展示最近 10 小时历史负荷、可用容量与边界线；右侧聚合当前运行状态、调控边界、历史判断与调节建议。",
-  sectionSimulation: "调控仿真区",
+  sectionSimulation: "调控仿真与执行策略区",
   sectionSimulationDesc:
-      "保留前 2 小时历史曲线，并展示未来 4 小时未调控、调控后和预测可用容量的变化。",
+      "根据站点目标峰值与当前枪口负荷情况，生成各充电枪的目标功率分配与调节建议，用于支撑站级限峰策略落地执行。",
   simWindowHint: "对比未来 4 小时窗口内调控前后峰值与容量裕度变化",
   showBoth: "全部展示",
   showBefore: "仅看未调控",
@@ -50,9 +50,9 @@ const text = {
   simSliderTitle: "调整调控后目标限峰值",
   simSliderDesc:
       "滑轨显示起点按最低保障功率下浮 4 MW 展示，实际可调区间仍为最低保障功率至最大功率，绿色为系统推荐范围。",
-  sectionBenefit: "收益分析",
+  sectionBenefit: "未来1小时收益评估",
   sectionBenefitDesc:
-      "历史收益与未来 1 小时策略收益采用模拟测算口径，仅用于评估当前限峰策略的相对价值。",
+      "基于当前目标限峰策略，测算未来1小时内基础收益、调控增益及移峰填谷收益，仅用于策略相对价值评估。",
   stationName: "站点名称",
   stationRegion: "所属区域",
   stationVoltage: "接入电压等级",
@@ -169,7 +169,8 @@ const pageViewConfigs = {
       { type: "峰", range: "14:00-18:00", price: 1.25, factor: 0.62, slots: ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"] },
       { type: "平", range: "10:00-14:00 / 18:00-22:00", price: 0.83, factor: 0.34, slots: ["10:00", "11:00", "12:00", "13:00", "18:00"] },
       { type: "谷", range: "22:00-次日08:00", price: 0.48, factor: 0.18, slots: [] }
-    ]
+    ],
+    recommendedStrategyGain: 620
   },
   evening: {
     currentIndex: 5,
@@ -201,7 +202,8 @@ const pageViewConfigs = {
       { type: "峰", range: "16:30-19:30", price: 1.28, factor: 0.64, slots: ["16:30", "17:00", "17:30", "18:00", "18:30", "19:00"] },
       { type: "平", range: "08:30-16:30 / 19:30-22:00", price: 0.86, factor: 0.36, slots: ["08:30", "09:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:00", "15:30", "16:00", "19:30", "20:00", "20:30"] },
       { type: "谷", range: "22:00-次日08:00", price: 0.49, factor: 0.18, slots: ["06:30", "07:30"] }
-    ]
+    ],
+    recommendedStrategyGain: 680
   }
 };
 
@@ -209,8 +211,15 @@ const activeViewConfig = computed(() => pageViewConfigs[pageView.value]);
 
 const historyChartRef = ref(null);
 const simulationChartRef = ref(null);
-const benefitChartRef = ref(null);
+const benefitCompositionChartRef = ref(null);
+const benefitShiftRatioChartRef = ref(null);
+const benefitCompareChartRef = ref(null);
+const gunStrategyChartRef = ref(null);
 const chartMap = new Map();
+const strategyView = ref("table");
+const strategyFilter = ref("all");
+const selectedGunId = ref("");
+const gunStrategyChartCollapsed = ref(false);
 const historyHoverCard = ref({ visible: false, mode: "line", x: 0, y: 0, title: "", label: "", value: "", desc: "" });
 const simulationHoverCard = ref({ visible: false, mode: "line", x: 0, y: 0, title: "", label: "", value: "", desc: "" });
 
@@ -262,6 +271,17 @@ const uncontrolledForecastFallback = pageViewConfigs.afternoon.uncontrolledForec
 const futureAvailableFallback = pageViewConfigs.afternoon.futureAvailable;
 
 const touTable = computed(() => activeViewConfig.value.touTable);
+const recommendedStrategyGain = computed(() => activeViewConfig.value.recommendedStrategyGain ?? 620);
+const shiftBenefitCard = computed(() => {
+  const priceDiff = pageView.value === "evening" ? 0.79 : 0.42;
+  const route = pageView.value === "evening" ? "峰 → 谷" : "峰 → 平";
+  return {
+    route,
+    priceDiff,
+    shiftEnergy: round(pageState.value?.nextHourShiftEnergy ?? 0, 2),
+    benefit: round(pageState.value?.nextHourShiftBenefit ?? 0, 2)
+  };
+});
 
 const fixedAdvice = computed(() => {
   return {
@@ -271,9 +291,9 @@ const fixedAdvice = computed(() => {
     strategyIntro: text.adviceIntro,
     scopeText: text.adviceScope,
     stationStrategy:
-      pageView.value === "afternoon"
-        ? "按 10-15 kV 接入口径展示，18:00-22:00 作为重点接入窗口，日常按建议边界执行。"
-        : "按 10-15 kV 接入口径展示，16:30 起进入晚高峰调控口径，重点兼顾限峰与收益协同。",
+        pageView.value === "afternoon"
+            ? "按 10-15 kV 接入口径展示，18:00-22:00 作为重点接入窗口，日常按建议边界执行。"
+            : "按 10-15 kV 接入口径展示，16:30 起进入晚高峰调控口径，重点兼顾限峰与收益协同。",
     powerBounds: {
       ratedPower: stationInfo.value.ratedPower,
       minimumGuarantee: stationInfo.value.minimumGuarantee,
@@ -389,7 +409,7 @@ function getSeriesDescription(name) {
     [text.historyAvailable]: "配网在对应时刻可提供给站点的可用容量。",
     [text.minGuaranteeLine]: "保障基础充电服务必须维持的最低功率线。",
     [text.maxPowerLine]: "当前站点按接入条件允许达到的最大功率边界。",
-    [text.targetLine]: "历史分析中用于判断限峰强度的目标控制线。",
+    // [text.targetLine]: "历史分析中用于判断限峰强度的目标控制线。",
     [text.beforeTargetLine]: "未调控场景下的目标限峰基准线。",
     [text.afterTargetLine]: "调控执行后的目标限峰线。",
     [text.uncontrolledForecast]: "不采取调控时的未来负荷预测。",
@@ -547,7 +567,7 @@ const uncontrolledForecast = computed(() => activeViewConfig.value.uncontrolledF
 
 const futureAvailable = computed(() => activeViewConfig.value.futureAvailable || futureAvailableFallback);
 const simulationFutureAvailableSeries = computed(() =>
-  futureAvailable.value.map((value, index) => (index < simulationCurrentIndex.value ? null : value))
+    futureAvailable.value.map((value, index) => (index < simulationCurrentIndex.value ? null : value))
 );
 
 function buildControlledForecast(limitMw) {
@@ -561,12 +581,12 @@ function buildControlledForecast(limitMw) {
     const available = futureAvailable.value[simulationLabels.value.indexOf(label)];
     const eveningTaper = pageView.value === "evening" ? index * 0.04 : 0;
     const templateValue =
-      pageView.value === "evening"
-        ? Math.min(shiftedTemplate[index] ?? hardLimit, (available ?? hardLimit) - 0.28)
-        : (shiftedTemplate[index] ?? hardLimit);
+        pageView.value === "evening"
+            ? Math.min(shiftedTemplate[index] ?? hardLimit, (available ?? hardLimit) - 0.28)
+            : (shiftedTemplate[index] ?? hardLimit);
     const target = Math.max(
-      stationInfo.value.minimumGuarantee,
-      Math.min(templateValue, hardLimit - eveningTaper)
+        stationInfo.value.minimumGuarantee,
+        Math.min(templateValue, hardLimit - eveningTaper)
     );
     return [label, round(target, 2)];
   });
@@ -576,6 +596,151 @@ function buildControlledForecast(limitMw) {
     return matched ? matched[1] : null;
   });
 }
+
+
+function calculateFutureHourBenefit(controlledSeries) {
+  const currentIndex = simulationCurrentIndex.value;
+  const nextHourLabels = simulationLabels.value.slice(currentIndex, Math.min(simulationLabels.value.length, currentIndex + 3));
+  const laterLabels = simulationLabels.value.slice(Math.min(simulationLabels.value.length, currentIndex + 3), Math.min(simulationLabels.value.length, currentIndex + 7));
+
+  const baseRevenue = round(
+      nextHourLabels.reduce((total, label) => {
+        const rule = getTouRule(label);
+        return total + stationInfo.value.minimumGuarantee * rule.factor * 50;
+      }, 0),
+      2
+  );
+
+  const peakStats = nextHourLabels.reduce(
+      (acc, label) => {
+        const index = simulationLabels.value.indexOf(label);
+        const before = uncontrolledForecast.value[index] ?? stationInfo.value.minimumGuarantee;
+        const after = controlledSeries[index] ?? stationInfo.value.minimumGuarantee;
+        const deltaMw = Math.max(0, before - after);
+        const energy = deltaMw * 0.5;
+        const rule = getTouRule(label);
+        acc.peakBenefit += energy * rule.price * rule.factor * 1000;
+        acc.cutEnergy += energy;
+        return acc;
+      },
+      { peakBenefit: 0, cutEnergy: 0 }
+  );
+
+  const recoveredEnergyRaw = laterLabels.reduce((total, label) => {
+    const index = simulationLabels.value.indexOf(label);
+    const before = uncontrolledForecast.value[index];
+    const after = controlledSeries[index];
+    if (before == null || after == null) return total;
+    return total + Math.max(0, after - before) * 0.5;
+  }, 0);
+
+  const shiftEnergy = round(Math.min(peakStats.cutEnergy * 0.45, recoveredEnergyRaw || peakStats.cutEnergy * 0.35), 2);
+  const peakRule = getTouRule(nextHourLabels[0]);
+  const betterRule = getTouRule(laterLabels[laterLabels.length - 1] || nextHourLabels[nextHourLabels.length - 1]);
+  const priceSpread = Math.max((peakRule.price - betterRule.price), 0.18);
+  const shiftBenefit = round(shiftEnergy * priceSpread * 1000, 2);
+  const otherControlGain = round(Math.max(0, peakStats.peakBenefit), 2);
+  const controlGain = round(otherControlGain + shiftBenefit, 2);
+  const totalRevenue = round(baseRevenue + controlGain, 2);
+  const shiftContributionPercent = controlGain > 0 ? round((shiftBenefit / controlGain) * 100, 2) : 0;
+
+  return {
+    baseRevenue,
+    cutEnergy: round(peakStats.cutEnergy, 2),
+    shiftEnergy,
+    otherControlGain,
+    shiftBenefit,
+    controlGain,
+    totalRevenue,
+    shiftContributionPercent
+  };
+}
+
+const gunStrategyBaseRows = computed(() => {
+  const configs = {
+    afternoon: [
+      { id: "A01", current: 180, baseTarget: 140, minTarget: 120, action: "降功率", priority: "低", reason: "停留时间充足，优先降载" },
+      { id: "A02", current: 160, baseTarget: 160, minTarget: 150, action: "优先保障", priority: "高", reason: "高时效订单，维持当前功率" },
+      { id: "A03", current: 150, baseTarget: 120, minTarget: 105, action: "降功率", priority: "中", reason: "可接受小幅下调，不影响服务" },
+      { id: "A04", current: 130, baseTarget: 90, minTarget: 75, action: "降功率", priority: "低", reason: "当前功率较高，优先调整" },
+      { id: "B01", current: 170, baseTarget: 150, minTarget: 135, action: "降功率", priority: "中", reason: "预计离站时间充足，可承担部分降载" },
+      { id: "B02", current: 120, baseTarget: 120, minTarget: 110, action: "优先保障", priority: "高", reason: "当前订单优先级高，优先保障" },
+      { id: "B03", current: 140, baseTarget: 110, minTarget: 95, action: "降功率", priority: "中", reason: "允许柔性下调，分摊总降载量" },
+      { id: "B04", current: 0, baseTarget: 0, minTarget: 0, action: "暂缓启动", priority: "低", reason: "延后接入以控制总峰值" }
+    ],
+    evening: [
+      { id: "A01", current: 210, baseTarget: 165, minTarget: 150, action: "降功率", priority: "低", reason: "晚高峰时段，优先承担降载" },
+      { id: "A02", current: 190, baseTarget: 190, minTarget: 175, action: "优先保障", priority: "高", reason: "高时效车辆，保持当前功率" },
+      { id: "A03", current: 175, baseTarget: 140, minTarget: 125, action: "降功率", priority: "中", reason: "可接受中等幅度下调" },
+      { id: "A04", current: 165, baseTarget: 120, minTarget: 110, action: "降功率", priority: "低", reason: "功率较高且时效宽松，优先下调" },
+      { id: "B01", current: 205, baseTarget: 180, minTarget: 165, action: "降功率", priority: "中", reason: "预计停留时间较长，可分摊降载" },
+      { id: "B02", current: 150, baseTarget: 150, minTarget: 140, action: "保持", priority: "高", reason: "当前订单优先级高，保持不变" },
+      { id: "B03", current: 168, baseTarget: 132, minTarget: 120, action: "降功率", priority: "中", reason: "允许柔性下调，维持服务连续性" },
+      { id: "B04", current: 92, baseTarget: 76, minTarget: 68, action: "降功率", priority: "低", reason: "低优先级枪口，承担补充调节" }
+    ]
+  };
+  return configs[pageView.value] || configs.afternoon;
+});
+
+const gunStrategySummary = computed(() => {
+  const currentPredictedTotal = round(pageState.value.beforePeak, 2);
+  const targetPeak = round(limitPower.value, 2);
+  const needReduction = round(Math.max(0, currentPredictedTotal - targetPeak), 2);
+  const strategyType = needReduction >= 1.2 ? "分级降功率策略" : needReduction >= 0.6 ? "优先级柔调" : "限峰保序";
+  return {
+    targetPeak,
+    currentPredictedTotal,
+    needReduction,
+    participantCount: gunStrategyRows.value.filter((item) => item.action !== "保持").length,
+    totalCount: gunStrategyRows.value.length,
+    strategyType
+  };
+});
+
+const gunStrategyRows = computed(() => {
+  const reductionRatio = Math.max(0, Math.min(1, (pageState.value.beforePeak - limitPower.value) / Math.max(pageState.value.beforePeak, 1)));
+  return gunStrategyBaseRows.value.map((item, index) => {
+    const weight = item.action === "优先保障" || item.action === "保持" ? 0 : item.priority === "低" ? 1 : 0.75;
+    const dynamicTarget = item.action === "暂缓启动"
+        ? 0
+        : item.action === "优先保障" || item.action === "保持"
+            ? item.baseTarget
+            : Math.max(item.minTarget, Math.round(item.current - (item.current - item.baseTarget) * (0.7 + reductionRatio * 0.9)));
+    const target = Math.min(item.current, dynamicTarget);
+    const delta = target - item.current;
+    let action = item.action;
+    if (item.action !== "暂缓启动" && item.action !== "优先保障") {
+      action = delta < 0 ? "降功率" : "保持";
+    }
+    const selected = selectedGunId.value === item.id;
+    return {
+      ...item,
+      target,
+      delta,
+      displayDelta: delta === 0 ? '0 kW' : `${delta < 0 ? '↓' : '↑'} ${Math.abs(delta)} kW`,
+      action,
+      selected,
+      index,
+      reason: item.reason,
+      compareValue: Math.max(item.current, target),
+      weight
+    };
+  });
+});
+
+const filteredGunStrategyRows = computed(() => {
+  if (strategyFilter.value === 'adjusted') return gunStrategyRows.value.filter((item) => item.action !== '保持' && item.action !== '优先保障');
+  if (strategyFilter.value === 'unchanged') return gunStrategyRows.value.filter((item) => item.action === '保持' || item.action === '优先保障');
+  return gunStrategyRows.value;
+});
+
+const gunStrategyDispatchSummary = computed(() => {
+  const rows = gunStrategyRows.value;
+  const reduceCount = rows.filter((item) => item.action === '降功率').length;
+  const holdCount = rows.filter((item) => item.action === '保持' || item.action === '优先保障').length;
+  const delayCount = rows.filter((item) => item.action === '暂缓启动').length;
+  return `本次调控策略按“优先保障高时效车辆、优先下调低优先级枪口、单枪不低于最小服务功率”的原则生成。系统已将 ${gunStrategySummary.value.needReduction.toFixed(2)} MW 的总降载需求映射到 ${gunStrategySummary.value.participantCount} 把充电枪，其中 ${reduceCount} 把执行降功率，${holdCount} 把保持不变或优先保障，${delayCount} 把暂缓启动。`;
+});
 
 const pageState = computed(() => {
   const currentIndex = simulationCurrentIndex.value;
@@ -590,7 +755,7 @@ const pageState = computed(() => {
   const currentAvailable = round(historyAvailable.value[historyAvailable.value.length - 1] ?? 13.12, 2);
   const currentLoad = round(historyActual.value[historyActual.value.length - 1] ?? 12.86, 2);
   const currentDelta = round(currentAvailable - currentLoad, 2);
-  const targetLineHistory = buildTargetLineSeries(historyActual.value, historyAvailable.value, Math.min(limitPower.value, currentAvailable - 0.12));
+  // const targetLineHistory = buildTargetLineSeries(historyActual.value, historyAvailable.value, Math.min(limitPower.value, currentAvailable - 0.12));
 
   const controlledForecast = buildControlledForecast(limitPower.value);
 
@@ -637,58 +802,23 @@ const pageState = computed(() => {
   );
   const historyTotalRevenue = round(baseRevenue + historyFlexibleRevenue, 2);
 
-  const nextHourLabels = simulationLabels.value.slice(currentIndex, currentIndex + 3);
-  const nextHourDelta = nextHourLabels.reduce(
-      (acc, label) => {
-        const index = simulationLabels.value.indexOf(label);
-        const before = uncontrolledForecast.value[index];
-        const after = controlledForecast[index];
-        const deltaMw = Math.max(0, before - after);
-        const energy = deltaMw * 0.5;
-        const rule = getTouRule(label);
-        acc.peakBenefit += energy * rule.price * rule.factor * 1000;
-        acc.cutEnergy += energy;
-        return acc;
-      },
-      { peakBenefit: 0, cutEnergy: 0 }
-  );
-
-  const shiftWindowLabels = simulationLabels.value.slice(
-      Math.min(simulationLabels.value.length, currentIndex + 4),
-      Math.min(simulationLabels.value.length, currentIndex + 8)
-  );
-  const shiftEnergy =
-      shiftWindowLabels.reduce((total, label) => {
-        const index = simulationLabels.value.indexOf(label);
-        const base = uncontrolledForecast.value[index];
-        const after = controlledForecast[index];
-        return total + Math.max(0, after - Math.min(base ?? 0, after));
-      }, 0) * 0.5;
-
-  const peakBenefit = round(nextHourDelta.peakBenefit, 2);
-  const shiftRule = getTouRule(shiftWindowLabels[0] || simulationLabels.value[8] || nextHourLabels[nextHourLabels.length - 1]);
-  const shiftBenefit = round(shiftEnergy * shiftRule.price * shiftRule.factor * 1000, 2);
-  const serviceCost = round(-48, 2);
-  const nextHourBaseRevenue = round(
-      nextHourLabels.reduce((total, label) => {
-        const rule = getTouRule(label);
-        return total + stationInfo.value.minimumGuarantee * rule.factor * 50;
-      }, 0),
-      2
-  );
-  const nextHourExpectedRevenue = round(
-      nextHourLabels.reduce((total, label) => {
-        const index = simulationLabels.value.indexOf(label);
-        const after = controlledForecast[index] ?? stationInfo.value.minimumGuarantee;
-        const incrementalPower = Math.max(0, after - stationInfo.value.minimumGuarantee);
-        const rule = getTouRule(label);
-        return total + incrementalPower * 0.5 * rule.price * 60;
-      }, 0),
-      2
-  );
-  const netBenefit = nextHourExpectedRevenue;
-  const nextHourTotalRevenue = round(nextHourBaseRevenue + nextHourExpectedRevenue, 2);
-  const extraRevenue = nextHourExpectedRevenue;
+  const benefitMetrics = calculateFutureHourBenefit(controlledForecast);
+  const recommendedBenefitMetrics = calculateFutureHourBenefit(buildControlledForecast(suggestedLimit));
+  const nextHourBaseRevenue = benefitMetrics.baseRevenue;
+  const nextHourControlGain = benefitMetrics.controlGain;
+  const nextHourShiftBenefit = benefitMetrics.shiftBenefit;
+  const nextHourOtherControlGain = benefitMetrics.otherControlGain;
+  const nextHourTotalRevenue = benefitMetrics.totalRevenue;
+  const nextHourExpectedRevenue = benefitMetrics.controlGain;
+  const extraRevenue = benefitMetrics.controlGain;
+  const nextHourCutEnergy = benefitMetrics.cutEnergy;
+  const nextHourShiftEnergy = benefitMetrics.shiftEnergy;
+  const peakBenefit = benefitMetrics.otherControlGain;
+  const shiftBenefit = benefitMetrics.shiftBenefit;
+  const serviceCost = 0;
+  const netBenefit = benefitMetrics.controlGain;
+  const shiftContributionPercent = benefitMetrics.shiftContributionPercent;
+  const recommendedControlGain = recommendedStrategyGain.value;
 
   const normalizedRiskStatus =
       currentDelta < 0 ? text.statusOver : currentDelta <= 0.25 ? text.statusNear : text.statusNormal;
@@ -724,11 +854,11 @@ const pageState = computed(() => {
     if (index < currentIndex) return null;
     if (index === currentIndex) {
       return round(
-        Math.min(
-          limitPower.value,
-          Math.max(stationInfo.value.minimumGuarantee, (futureAvailable.value[currentIndex] ?? limitPower.value) - 0.04)
-        ),
-        2
+          Math.min(
+              limitPower.value,
+              Math.max(stationInfo.value.minimumGuarantee, (futureAvailable.value[currentIndex] ?? limitPower.value) - 0.04)
+          ),
+          2
       );
     }
     const available = futureAvailable.value[index];
@@ -736,12 +866,12 @@ const pageState = computed(() => {
       const step = index - currentIndex;
       const taperedTarget = limitPower.value - step * 0.05;
       return round(
-        Math.min(
-          Math.max(stationInfo.value.minimumGuarantee, controlledForecast[index] + 0.08),
-          taperedTarget,
-          Math.max(stationInfo.value.minimumGuarantee, (available ?? limitPower.value) - 0.03)
-        ),
-        2
+          Math.min(
+              Math.max(stationInfo.value.minimumGuarantee, controlledForecast[index] + 0.08),
+              taperedTarget,
+              Math.max(stationInfo.value.minimumGuarantee, (available ?? limitPower.value) - 0.03)
+          ),
+          2
       );
     }
     return round(Math.min(limitPower.value, Math.max(stationInfo.value.minimumGuarantee, (available ?? limitPower.value) - 0.05)), 2);
@@ -800,7 +930,7 @@ const pageState = computed(() => {
     sliderRecommendedLeftPercent,
     sliderRecommendedWidthPercent,
     sliderRecommendedRightPercent,
-    targetLineHistory,
+    // targetLineHistory,
     controlledForecast,
     currentAvailable,
     currentLoad,
@@ -820,9 +950,14 @@ const pageState = computed(() => {
     nextHourExpectedRevenue: netBenefit,
     nextHourBaseRevenue,
     nextHourTotalRevenue,
+    nextHourControlGain,
+    nextHourShiftBenefit,
+    nextHourOtherControlGain,
+    recommendedControlGain,
+    shiftContributionPercent,
     extraRevenue,
-    nextHourCutEnergy: round(nextHourDelta.cutEnergy, 2),
-    nextHourShiftEnergy: round(shiftEnergy, 2),
+    nextHourCutEnergy,
+    nextHourShiftEnergy,
     peakBenefit,
     shiftBenefit,
     serviceCost,
@@ -947,34 +1082,34 @@ function renderHistoryChart() {
         },
         z: 1
       },
-      {
-        name: text.targetLine,
-        type: "line",
-        triggerLineEvent: true,
-        smooth: true,
-        data: pageState.value.targetLineHistory,
-        symbol: "triangle",
-        symbolSize: 7,
-        lineStyle: { width: 3.4, color: "#de8d36", type: "solid" },
-        itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
-        markLine: {
-          silent: true,
-          symbol: ["none", "none"],
-          lineStyle: { color: "#8ea1b8", type: "dashed", width: 1.6 },
-          label: {
-            show: true,
-            formatter: `${text.currentTime}
-${historyLabels.value[historyLabels.value.length - 1]}`,
-            position: "insideEndTop",
-            color: "#4f6480",
-            backgroundColor: "rgba(255,255,255,0.92)",
-            padding: [4, 6],
-            borderRadius: 4
-          },
-          data: [{ xAxis: historyLabels.value[historyLabels.value.length - 1] }]
-        },
-        z: 4
-      }
+//       {
+//         name: text.targetLine,
+//         type: "line",
+//         triggerLineEvent: true,
+//         smooth: true,
+//         data: pageState.value.targetLineHistory,
+//         symbol: "triangle",
+//         symbolSize: 7,
+//         lineStyle: { width: 3.4, color: "#de8d36", type: "solid" },
+//         itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
+//         markLine: {
+//           silent: true,
+//           symbol: ["none", "none"],
+//           lineStyle: { color: "#8ea1b8", type: "dashed", width: 1.6 },
+//           label: {
+//             show: true,
+//             formatter: `${text.currentTime}
+// ${historyLabels.value[historyLabels.value.length - 1]}`,
+//             position: "insideEndTop",
+//             color: "#4f6480",
+//             backgroundColor: "rgba(255,255,255,0.92)",
+//             padding: [4, 6],
+//             borderRadius: 4
+//           },
+//           data: [{ xAxis: historyLabels.value[historyLabels.value.length - 1] }]
+//         },
+//         z: 4
+//       }
     ]
   });
 }
@@ -1093,18 +1228,18 @@ ${currentTime}`,
       itemStyle: { color: "#4aa37b", borderColor: "#ffffff", borderWidth: 2 },
       z: 4
     },
-    {
-      name: text.targetLine,
-      type: "line",
-      triggerLineEvent: true,
-      smooth: true,
-      data: simulationHistoryTarget.value,
-      symbol: "triangle",
-      symbolSize: 8,
-      lineStyle: { width: 3.2, color: "#de8d36", type: "solid" },
-      itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
-      z: 4
-    },
+    // {
+    //   name: text.targetLine,
+    //   type: "line",
+    //   triggerLineEvent: true,
+    //   smooth: true,
+    //   data: simulationHistoryTarget.value,
+    //   symbol: "triangle",
+    //   symbolSize: 8,
+    //   lineStyle: { width: 3.2, color: "#de8d36", type: "solid" },
+    //   itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
+    //   z: 4
+    // },
     {
       name: text.futureAvailable,
       type: "line",
@@ -1122,16 +1257,6 @@ ${currentTime}`,
 
   if (showBefore) {
     series.push({
-      name: text.beforeTargetLine,
-      type: "line",
-      triggerLineEvent: true,
-      smooth: false,
-      data: pageState.value.simulationTargetBeforeSeries,
-      symbol: "none",
-      lineStyle: { width: 2.6, color: "#f0ad57", type: "dashed" },
-      z: 5
-    });
-    series.push({
       name: text.uncontrolledForecast,
       type: "line",
       triggerLineEvent: true,
@@ -1147,16 +1272,6 @@ ${currentTime}`,
   }
 
   if (showAfter) {
-    series.push({
-      name: text.afterTargetLine,
-      type: "line",
-      triggerLineEvent: true,
-      smooth: false,
-      data: pageState.value.simulationTargetAfterSeries,
-      symbol: "none",
-      lineStyle: { width: 2.6, color: "#c8781c", type: "dotted" },
-      z: 5
-    });
     series.push({
       name: text.controlledForecast,
       type: "line",
@@ -1192,9 +1307,9 @@ ${currentTime}`,
         text.targetLine,
         text.minGuaranteeLine,
         text.maxPowerLine,
-        ...(showBefore ? [text.uncontrolledForecast, text.beforeTargetLine] : []),
+        ...(showBefore ? [text.uncontrolledForecast] : []),
         text.futureAvailable,
-        ...(showAfter ? [text.controlledForecast, text.afterTargetLine] : [])
+        ...(showAfter ? [text.controlledForecast] : [])
       ]
     },
     grid: { left: 42, right: 18, top: 112, bottom: 34, containLabel: true },
@@ -1217,141 +1332,283 @@ ${currentTime}`,
   }, { notMerge: true });
 }
 
-function renderBenefitChart() {
-  const chart = ensureChart("benefit", benefitChartRef.value);
+function renderGunStrategyChart() {
+  const chart = ensureChart("gunStrategy", gunStrategyChartRef.value);
   if (!chart) return;
-  const width = chart.getWidth();
-  const compact = width < 760;
-  const leftCenter = compact ? "26%" : "28%";
-  const rightCenter = compact ? "74%" : "72%";
-  const centerY = compact ? "44%" : "45%";
-  const ringInnerRadius = compact ? "38%" : "40%";
-  const ringOuterRadius = compact ? "62%" : "66%";
-
-  const {
-    baseRevenue,
-    historyFlexibleRevenue,
-    historyTotalRevenue,
-    nextHourBaseRevenue,
-    nextHourExpectedRevenue,
-    nextHourTotalRevenue,
-    extraRevenue
-  } = pageState.value;
-
+  const rows = filteredGunStrategyRows.value;
+  chart.off("click");
   chart.setOption({
     backgroundColor: "transparent",
     tooltip: {
-      trigger: "item",
-      formatter: ({ name, value, percent }) => `${name}<br/>${Number(value).toFixed(0)} 元 (${percent}%)`
-    },
-    title: [
-      {
-        left: leftCenter,
-        top: compact ? "36.5%" : "37.5%",
-        textAlign: "center",
-        textVerticalAlign: "middle",
-        text: `{label|未来1小时收益}\n{value|${nextHourTotalRevenue.toFixed(0)} 元}\n{desc|基础 ${nextHourBaseRevenue.toFixed(0)} | 增量 ${extraRevenue.toFixed(0)}}`,
-        textStyle: {
-          rich: {
-            label: {
-              color: "#6f86a0",
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: 22
-            },
-            value: {
-              color: "#17355c",
-              fontSize: compact ? 24 : 28,
-              fontWeight: 700,
-              lineHeight: compact ? 34 : 38
-            },
-            desc: {
-              color: "#7c90aa",
-              fontSize: compact ? 11 : 12,
-              fontWeight: 500,
-              lineHeight: 18
-            }
-          }
-        }
-      },
-      {
-        left: rightCenter,
-        top: compact ? "36.5%" : "37.5%",
-        textAlign: "center",
-        textVerticalAlign: "middle",
-        text: `{label|历史累计收益}\n{value|${historyTotalRevenue.toFixed(0)} 元}\n{desc|基础 ${baseRevenue.toFixed(0)} | 柔性 ${historyFlexibleRevenue.toFixed(0)}}`,
-        textStyle: {
-          rich: {
-            label: {
-              color: "#6f86a0",
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: 22
-            },
-            value: {
-              color: "#17355c",
-              fontSize: compact ? 24 : 28,
-              fontWeight: 700,
-              lineHeight: compact ? 34 : 38
-            },
-            desc: {
-              color: "#7c90aa",
-              fontSize: compact ? 11 : 12,
-              fontWeight: 500,
-              lineHeight: 18
-            }
-          }
-        }
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params) => {
+        const row = rows[params?.[0]?.dataIndex || 0];
+        if (!row) return "";
+        return [
+          `<strong>${row.id}</strong>`,
+          `当前功率：${row.current} kW`,
+          `目标功率：${row.target} kW`,
+          `调整量：${row.displayDelta}`,
+          `调控动作：${row.action}`,
+          `执行原因：${row.reason}`
+        ].join('<br/>');
       }
-    ],
-    legend: { show: false },
+    },
+    legend: {
+      top: 0,
+      left: "center",
+      itemWidth: 16,
+      itemHeight: 10,
+      textStyle: { color: "#4f6480", fontSize: 12, fontWeight: 600 },
+      data: ["当前功率", "目标功率"]
+    },
+    grid: { left: 70, right: 20, top: 52, bottom: 24, containLabel: true },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: 300,
+      name: "kW",
+      nameTextStyle: { color: "#6b7f98", padding: [0, 0, 0, 6] },
+      splitLine: { lineStyle: { color: "#ebeff5" } },
+      axisLabel: { color: "#6b7f98" },
+      axisLine: { lineStyle: { color: "#d5dce8" } }
+    },
+    yAxis: {
+      type: "category",
+      data: rows.map((item) => item.id),
+      axisLabel: { color: "#6b7f98" },
+      axisLine: { lineStyle: { color: "#d5dce8" } }
+    },
     series: [
       {
-        name: "历史总收益",
-        type: "pie",
-        radius: [ringInnerRadius, ringOuterRadius],
-        center: [rightCenter, centerY],
-        avoidLabelOverlap: false,
-        label: { show: false },
-        labelLine: { show: false },
-        emphasis: { scale: false },
+        name: "当前功率",
+        type: "bar",
+        barWidth: 14,
         itemStyle: {
-          borderColor: "#f7fbff",
-          borderWidth: 5,
-          borderRadius: 8
+          color: (params) => rows[params.dataIndex]?.selected ? "#244fcf" : "#95b1da",
+          borderRadius: [0, 8, 8, 0]
         },
-        data: [
-          { value: baseRevenue, name: text.baseRevenue, itemStyle: { color: "#95b1da" } },
-          { value: historyFlexibleRevenue, name: text.flexRevenue, itemStyle: { color: "#2d8b68" } }
-        ]
+        data: rows.map((item) => item.current)
       },
       {
-        name: "未来1小时收益",
-        type: "pie",
-        radius: [ringInnerRadius, ringOuterRadius],
-        center: [leftCenter, centerY],
-        avoidLabelOverlap: false,
-        label: { show: false },
-        labelLine: { show: false },
-        emphasis: { scale: false },
+        name: "目标功率",
+        type: "bar",
+        barWidth: 14,
         itemStyle: {
-          borderColor: "#f7fbff",
-          borderWidth: 5,
-          borderRadius: 8
+          color: (params) => rows[params.dataIndex]?.selected ? "#1d7f59" : "#4cb284",
+          borderRadius: [0, 8, 8, 0]
         },
-        data: [
-          { value: nextHourBaseRevenue, name: text.baseRevenue, itemStyle: { color: "#c6d4ea" } },
-          { value: Math.max(nextHourExpectedRevenue, 0.01), name: "未来额外收益", itemStyle: { color: "#de8b37" } }
-        ]
+        data: rows.map((item) => item.target)
       }
     ]
+  }, { notMerge: true });
+  chart.on("click", (params) => {
+    const row = rows[params.dataIndex];
+    if (!row) return;
+    selectedGunId.value = selectedGunId.value === row.id ? "" : row.id;
+    renderGunStrategyChart();
   });
+}
+
+function renderBenefitChart() {
+  const compositionChart = ensureChart("benefitComposition", benefitCompositionChartRef.value);
+  const shiftRatioChart = ensureChart("benefitShiftRatio", benefitShiftRatioChartRef.value);
+  const compareChart = ensureChart("benefitCompare", benefitCompareChartRef.value);
+
+  if (compositionChart) {
+    compositionChart.setOption({
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "item",
+        formatter: ({ name, value, percent }) => `${name}<br/>${Number(value).toFixed(0)} 元 (${percent}%)`
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["58%", "78%"],
+          center: ["50%", "50%"],
+          label: {
+            show: true,
+            formatter: ({ name, percent }) => `${name}
+${percent}%`,
+            color: "#4f6480",
+            fontSize: 12
+          },
+          labelLine: {
+            length: 12,
+            length2: 10,
+            lineStyle: { color: "#9fb0c7" }
+          },
+          itemStyle: { borderColor: "#f7fbff", borderWidth: 4 },
+          data: [
+            { value: pageState.value.nextHourBaseRevenue, name: "基础收益", itemStyle: { color: "#95b1da" } },
+            { value: Math.max(pageState.value.nextHourControlGain, 0.01), name: "调控增益", itemStyle: { color: "#de8b37" } }
+          ]
+        }
+      ],
+      graphic: [
+        {
+          type: "text",
+          left: "center",
+          top: "39%",
+          style: {
+            text: `${pageState.value.nextHourTotalRevenue.toFixed(0)} 元`,
+            textAlign: "center",
+            fill: "#17355c",
+            fontSize: 24,
+            fontWeight: 700
+          }
+        },
+        {
+          type: "text",
+          left: "center",
+          top: "53%",
+          style: {
+            text: "未来1小时总收益",
+            textAlign: "center",
+            fill: "#7288a4",
+            fontSize: 13
+          }
+        },
+        {
+          type: "text",
+          left: "center",
+          top: "66%",
+          style: {
+            text: `基础 ${pageState.value.nextHourBaseRevenue.toFixed(0)} | 增益 ${pageState.value.nextHourControlGain.toFixed(0)}`,
+            textAlign: "center",
+            fill: "#6a7f98",
+            fontSize: 12,
+            fontWeight: 600
+          }
+        }
+      ]
+    });
+  }
+
+  if (shiftRatioChart) {
+    shiftRatioChart.setOption({
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "item",
+        formatter: ({ name, value, percent }) => `${name}<br/>${Number(value).toFixed(0)} 元 (${percent}%)`
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["58%", "78%"],
+          center: ["50%", "50%"],
+          label: {
+            show: true,
+            formatter: ({ name, percent }) => `${name}
+${percent}%`,
+            color: "#4f6480",
+            fontSize: 12
+          },
+          labelLine: {
+            length: 12,
+            length2: 10,
+            lineStyle: { color: "#9fb0c7" }
+          },
+          itemStyle: { borderColor: "#f7fbff", borderWidth: 4 },
+          data: [
+            { value: Math.max(pageState.value.nextHourShiftBenefit, 0.01), name: "移峰填谷收益", itemStyle: { color: "#2d8b68" } },
+            { value: Math.max(pageState.value.nextHourOtherControlGain, 0.01), name: "其他调控收益", itemStyle: { color: "#b8c7df" } }
+          ]
+        }
+      ],
+      graphic: [
+        {
+          type: "text",
+          left: "center",
+          top: "39%",
+          style: {
+            text: `${pageState.value.nextHourControlGain.toFixed(0)} 元`,
+            textAlign: "center",
+            fill: "#17355c",
+            fontSize: 24,
+            fontWeight: 700
+          }
+        },
+        {
+          type: "text",
+          left: "center",
+          top: "53%",
+          style: {
+            text: "调控收益总额",
+            textAlign: "center",
+            fill: "#7288a4",
+            fontSize: 13
+          }
+        },
+        {
+          type: "text",
+          left: "center",
+          top: "66%",
+          style: {
+            text: `移峰填谷 ${pageState.value.shiftContributionPercent.toFixed(0)}%`,
+            textAlign: "center",
+            fill: "#2d8b68",
+            fontSize: 12,
+            fontWeight: 600
+          }
+        }
+      ]
+    });
+  }
+
+  if (compareChart) {
+    compareChart.setOption({
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params) => {
+          const item = params?.[0];
+          return `${item?.name}<br/>调控收益 ${Number(item?.value || 0).toFixed(0)} 元`;
+        }
+      },
+      grid: { left: 52, right: 16, top: 24, bottom: 38 },
+      xAxis: {
+        type: "category",
+        data: ["推荐策略", "当前策略"],
+        axisLine: { lineStyle: { color: "#d5dce8" } },
+        axisLabel: { color: "#6b7f98" }
+      },
+      yAxis: {
+        type: "value",
+        name: "元",
+        nameTextStyle: { color: "#6b7f98", padding: [0, 0, 0, 8] },
+        splitLine: { lineStyle: { color: "#ebeff5" } },
+        axisLabel: { color: "#6b7f98" }
+      },
+      series: [
+        {
+          type: "bar",
+          barWidth: 42,
+          data: [
+            { value: pageState.value.recommendedControlGain, itemStyle: { color: "#7fb48e", borderRadius: [10, 10, 0, 0] } },
+            { value: pageState.value.nextHourControlGain, itemStyle: { color: "#2f6bff", borderRadius: [10, 10, 0, 0] } }
+          ],
+          label: {
+            show: true,
+            position: "top",
+            color: "#17355c",
+            fontWeight: 700,
+            formatter: ({ value }) => `${Number(value).toFixed(0)}`
+          }
+        }
+      ]
+    });
+  }
 }
 
 async function renderAllCharts() {
   await nextTick();
   renderHistoryChart();
   renderSimulationChart();
+  renderGunStrategyChart();
   renderBenefitChart();
 }
 
@@ -1362,10 +1619,16 @@ function handleResize() {
 watch(limitPower, renderAllCharts);
 watch(scenario, renderAllCharts, { deep: true });
 watch(simulationMode, renderAllCharts);
+watch(strategyFilter, renderAllCharts);
+watch(strategyView, renderAllCharts);
+watch(selectedGunId, renderAllCharts);
 watch(pageView, () => {
   limitPower.value = activeViewConfig.value.initialLimit;
   simulationMode.value = "both";
   sliderHovering.value = false;
+  strategyFilter.value = "all";
+  strategyView.value = "table";
+  selectedGunId.value = "";
   renderAllCharts();
 });
 
@@ -1392,12 +1655,12 @@ onBeforeUnmount(() => {
         </div>
         <div class="view-switch-group">
           <button
-            v-for="item in pageViewOptions"
-            :key="item.key"
-            type="button"
-            class="view-switch-btn"
-            :class="{ active: pageView === item.key }"
-            @click="pageView = item.key"
+              v-for="item in pageViewOptions"
+              :key="item.key"
+              type="button"
+              class="view-switch-btn"
+              :class="{ active: pageView === item.key }"
+              @click="pageView = item.key"
           >
             {{ item.label }}
           </button>
@@ -1408,6 +1671,14 @@ onBeforeUnmount(() => {
           <div class="mini-label">{{ text.basicInfo }}</div>
           <div class="station-name">{{ stationInfo.name }}</div>
           <div class="station-basic-inline">{{ fixedAdvice.stationStrategy }}</div>
+          <div class="station-basic-inline">
+            <span class="station-basic-extra-label">充电枪数量：</span>
+            <span>{{ stationInfo.fast + stationInfo.slow }}</span>
+          </div>
+
+          <div class="station-basic-inline">
+            <small>快充{{ stationInfo.fast }}/慢充{{ stationInfo.slow }}</small>
+          </div>
         </div>
 
         <div class="advisory-card power-card">
@@ -1546,15 +1817,15 @@ onBeforeUnmount(() => {
             <small>较最低保障功率 {{ formatSignedPercent(pageState.growthFromMinimumPercent) }}</small>
           </div>
         </header>
-          <div class="sim-slider-summary">
-            <div class="sim-slider-summary-item total">
-              <span>{{ "总范围" }}</span>
+        <div class="sim-slider-summary">
+          <div class="sim-slider-summary-item total">
+            <span>{{ "总范围" }}</span>
             <strong>{{ displayRangeStart.toFixed(1) }} - {{ stationInfo.ratedPower.toFixed(1) }} MW</strong>
-            </div>
-            <div class="sim-slider-summary-item adjustable">
-              <span>{{ "可调区间" }}</span>
+          </div>
+          <div class="sim-slider-summary-item adjustable">
+            <span>{{ "可调区间" }}</span>
             <strong>{{ stationInfo.minimumGuarantee.toFixed(1) }} - {{ stationInfo.ratedPower.toFixed(1) }} MW</strong>
-            </div>
+          </div>
           <div class="sim-slider-summary-item recommend">
             <span>{{ text.recRange }}</span>
             <strong>{{ pageState.recommendedLimitMin.toFixed(1) }} - {{ pageState.recommendedLimitMax.toFixed(1) }} MW</strong>
@@ -1662,11 +1933,11 @@ onBeforeUnmount(() => {
                 <div class="sim-compare-item"><span>{{ text.overDuration }}</span><strong>{{ (pageState.beforeOverSlots * 0.5).toFixed(1) }} {{ "小时" }}</strong></div>
               </div>
               <div class="sim-compare-card after">
-              <div class="sim-compare-title">{{ text.afterCard }}</div>
-              <div class="sim-compare-item"><span>{{ text.targetLimit }}</span><strong>{{ pageState.afterTargetValue.toFixed(2) }} MW</strong></div>
-              <div class="sim-compare-item"><span>{{ text.predPeak }}</span><strong>{{ pageState.afterPeak.toFixed(2) }} MW</strong></div>
-              <div class="sim-compare-item"><span>{{ text.minCapGap }}</span><strong>{{ pageState.afterMinGap.toFixed(2) }} MW</strong></div>
-              <div class="sim-compare-item"><span>{{ text.overLimit }}</span><strong>{{ pageState.afterOverSlots > 0 ? "是" : "否" }}</strong></div>
+                <div class="sim-compare-title">{{ text.afterCard }}</div>
+                <div class="sim-compare-item"><span>{{ text.targetLimit }}</span><strong>{{ pageState.afterTargetValue.toFixed(2) }} MW</strong></div>
+                <div class="sim-compare-item"><span>{{ text.predPeak }}</span><strong>{{ pageState.afterPeak.toFixed(2) }} MW</strong></div>
+                <div class="sim-compare-item"><span>{{ text.minCapGap }}</span><strong>{{ pageState.afterMinGap.toFixed(2) }} MW</strong></div>
+                <div class="sim-compare-item"><span>{{ text.overLimit }}</span><strong>{{ pageState.afterOverSlots > 0 ? "是" : "否" }}</strong></div>
                 <div class="sim-compare-item"><span>{{ text.effectiveDuration }}</span><strong>{{ pageState.effectiveControlDuration.toFixed(1) }} {{ "小时" }}</strong></div>
               </div>
             </div>
@@ -1695,76 +1966,248 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+
+      <div class="gun-strategy-section">
+        <div class="strategy-section-head">
+          <div>
+            <div class="strategy-section-title">充电枪调控策略</div>
+            <div class="strategy-section-desc">根据站点目标峰值与当前枪口负荷情况，生成各充电枪的目标功率分配与调节建议，用于支撑站级限峰策略落地执行。</div>
+          </div>
+        </div>
+
+        <div class="strategy-overview-card">
+          <div class="group-title">站级策略总览</div>
+          <div class="strategy-overview-grid">
+            <div class="strategy-overview-item">
+              <span>站点目标峰值</span>
+              <strong>{{ gunStrategySummary.targetPeak.toFixed(2) }} MW</strong>
+              <small>当前调控策略要求站点总功率不超过该值。</small>
+            </div>
+            <div class="strategy-overview-item">
+              <span>当前预计总功率</span>
+              <strong>{{ gunStrategySummary.currentPredictedTotal.toFixed(2) }} MW</strong>
+              <small>按未调控预测，未来窗口内站点可能达到的总负荷水平。</small>
+            </div>
+            <div class="strategy-overview-item">
+              <span>需总降载量</span>
+              <strong>{{ gunStrategySummary.needReduction.toFixed(2) }} MW</strong>
+              <small>为满足目标峰值，需要在枪级层面分摊的总降载量。</small>
+            </div>
+            <div class="strategy-overview-item">
+              <span>参与调控枪数</span>
+              <strong>{{ gunStrategySummary.participantCount }} / {{ gunStrategySummary.totalCount }} 把</strong>
+              <small>当前参与功率下调或延后启动的充电枪数量。</small>
+            </div>
+            <div class="strategy-overview-item">
+              <span>策略类型</span>
+              <strong>{{ gunStrategySummary.strategyType }}</strong>
+              <small>结合站级目标峰值与枪口优先级生成的执行策略。</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="strategy-principle-card">
+          <div class="group-title">策略生成原则</div>
+          <div class="strategy-principle-grid">
+            <div class="strategy-principle-item">
+              <div class="strategy-principle-title">分配原则</div>
+              <div class="strategy-principle-text">优先下调低优先级充电枪功率，优先保障高时效订单与高优先级车辆充电需求。</div>
+            </div>
+            <div class="strategy-principle-item">
+              <div class="strategy-principle-title">执行边界</div>
+              <div class="strategy-principle-text">单枪目标功率不低于最小服务功率；站点总功率不高于目标峰值；接近最低保障边界时不再继续下调。</div>
+            </div>
+            <div class="strategy-principle-item">
+              <div class="strategy-principle-title">执行方式</div>
+              <div class="strategy-principle-text">策略按当前时刻统一下发，后续每 15 分钟滚动校核一次，并支持人工微调。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="strategy-chart-card">
+          <button type="button" class="strategy-chart-toggle" @click="gunStrategyChartCollapsed = !gunStrategyChartCollapsed">
+            <div>
+              <div class="group-title">充电枪功率分配对比</div>
+              <div class="panel-desc">展示当前功率与目标功率的差异，直观反映各充电枪调节幅度。</div>
+            </div>
+            <span class="strategy-chart-toggle-icon" :class="{ collapsed: gunStrategyChartCollapsed }">⌃</span>
+          </button>
+          <div v-show="!gunStrategyChartCollapsed" class="chart-wrap collapsible-chart-wrap">
+            <div ref="gunStrategyChartRef" class="flex-page-chart flex-page-chart-gun-strategy"></div>
+          </div>
+        </div>
+
+        <div class="strategy-detail-card">
+          <div class="strategy-detail-head">
+            <div>
+              <div class="group-title">枪级调控明细</div>
+              <div class="panel-desc">各充电枪目标功率与执行建议</div>
+            </div>
+            <div class="strategy-toolbar">
+              <div class="strategy-toggle-group">
+                <button type="button" class="strategy-toggle" :class="{ active: strategyView === 'table' }" @click="strategyView = 'table'">表格视图</button>
+                <button type="button" class="strategy-toggle" :class="{ active: strategyView === 'card' }" @click="strategyView = 'card'">卡片视图</button>
+              </div>
+              <div class="strategy-toggle-group filter-group">
+                <button type="button" class="strategy-toggle" :class="{ active: strategyFilter === 'all' }" @click="strategyFilter = 'all'">全部充电枪</button>
+                <button type="button" class="strategy-toggle" :class="{ active: strategyFilter === 'adjusted' }" @click="strategyFilter = 'adjusted'">仅看参与调控</button>
+                <button type="button" class="strategy-toggle" :class="{ active: strategyFilter === 'unchanged' }" @click="strategyFilter = 'unchanged'">仅看保持不变</button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="strategyView === 'table'" class="strategy-table-wrap">
+            <table class="strategy-table">
+              <thead>
+              <tr>
+                <th>充电枪编号</th>
+                <th>当前功率</th>
+                <th>目标功率</th>
+                <th>调整量</th>
+                <th>调控动作</th>
+                <th>优先级</th>
+                <th>执行说明</th>
+              </tr>
+              </thead>
+              <tbody>
+              <tr v-for="item in filteredGunStrategyRows" :key="item.id" :class="{ active: selectedGunId === item.id }" @click="selectedGunId = selectedGunId === item.id ? '' : item.id">
+                <td>{{ item.id }}</td>
+                <td>{{ item.current }} kW</td>
+                <td>{{ item.target }} kW</td>
+                <td>{{ item.displayDelta }}</td>
+                <td>{{ item.action }}</td>
+                <td><span class="priority-tag" :class="item.priority">{{ item.priority }}</span></td>
+                <td>{{ item.reason }}</td>
+              </tr>
+              </tbody>
+              <tfoot>
+              <tr>
+                <td colspan="7">当前总功率：{{ gunStrategySummary.currentPredictedTotal.toFixed(2) }} MW　｜　目标总功率：{{ gunStrategySummary.targetPeak.toFixed(2) }} MW　｜　总降载量：{{ gunStrategySummary.needReduction.toFixed(2) }} MW</td>
+              </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div v-else class="strategy-card-grid">
+            <div v-for="item in filteredGunStrategyRows" :key="item.id" class="strategy-gun-card" :class="{ active: selectedGunId === item.id }" @click="selectedGunId = selectedGunId === item.id ? '' : item.id">
+              <div class="strategy-gun-card-head">
+                <strong>{{ item.id }}</strong>
+                <span class="priority-tag" :class="item.priority">{{ item.priority }}</span>
+              </div>
+              <div class="strategy-gun-power"><strong>{{ item.current }} kW</strong><span>→</span><strong>{{ item.target }} kW</strong></div>
+              <div class="strategy-gun-meta">调整量：{{ item.displayDelta }}</div>
+              <div class="strategy-gun-meta">调控动作：{{ item.action }}</div>
+              <div class="strategy-gun-desc">执行说明：{{ item.reason }}</div>
+            </div>
+          </div>
+
+          <div class="strategy-dispatch-card">
+            <div class="group-title">策略下发说明</div>
+            <div class="conclusion-text">{{ gunStrategyDispatchSummary }}</div>
+          </div>
+        </div>
+      </div>
     </section>
   </CollapsiblePanel>
 
   <CollapsiblePanel class="section" :title="text.sectionBenefit" :desc="text.sectionBenefitDesc">
     <div class="benefit-layout">
-      <div class="benefit-metric-column">
-        <div class="stat-card compact primary">
-          <div class="label">{{ "未来1小时总收益" }}</div>
-          <div class="value">{{ pageState.nextHourTotalRevenue.toFixed(0) }}</div>
-          <div class="muted">{{ "元 · 未来1小时总收益 = 基础收益 + 额外收益" }}</div>
+      <div class="benefit-main-card">
+        <div class="benefit-core-grid">
+          <div class="benefit-core-card">
+            <div class="label">未来1小时总收益</div>
+            <div class="value">{{ pageState.nextHourTotalRevenue.toFixed(0) }}</div>
+            <div class="muted">当前策略下，未来1小时总收益</div>
+            <div class="benefit-core-desc">未来1小时总收益 = 基础收益 + 调控增益</div>
+          </div>
+          <div class="benefit-core-card">
+            <div class="label">未来1小时柔性调控增益</div>
+            <div class="value">{{ pageState.nextHourControlGain.toFixed(0) }}</div>
+            <div class="muted">由限峰、削峰、容量约束规避等带来的收益增量</div>
+            <div class="benefit-core-desc">在基础收益之上，由当前的柔性调控策略带来的增量收益</div>
+          </div>
+          <div class="benefit-core-card">
+            <div class="label">未来1小时移峰填谷收益</div>
+            <div class="value">{{ pageState.nextHourShiftBenefit.toFixed(0) }}</div>
+            <div class="muted">由于将部分充电需求从高价/高负荷时段转移到更优时段而产生的收益</div>
+            <div class="benefit-core-desc">通过将高峰时段负荷后移至更优时段形成的价差收益与容量优化收益</div>
+          </div>
         </div>
-        <div class="stat-card compact">
-          <div class="label">{{ "未来1小时额外收益" }}</div>
-          <div class="value">{{ pageState.nextHourExpectedRevenue.toFixed(0) }}</div>
-          <div class="muted">{{ "元 · 在基础收益之上，由调控抬升带来的增量收益" }}</div>
-        </div>
-        <div class="stat-card compact">
-          <div class="label">{{ text.totalRevenue }}</div>
-          <div class="value">{{ pageState.historyTotalRevenue.toFixed(0) }}</div>
-          <div class="muted">{{ "元 · 历史总收益 = 基础收益 + 历史柔性收益" }}</div>
-        </div>
-        <div class="stat-card compact">
-          <div class="label">{{ text.baseRevenue }}</div>
-          <div class="value">{{ pageState.baseRevenue.toFixed(0) }}</div>
-          <div class="muted">{{ "元 · 基于最低保障功率持续运行形成的历史基础收益" }}</div>
+
+        <div class="benefit-visual-grid">
+          <div class="benefit-visual-card">
+            <div class="label" style="margin-bottom: 12px;">未来1小时总收益构成</div>
+            <div class="chart-wrap">
+              <div ref="benefitCompositionChartRef" class="flex-page-chart flex-page-chart-benefit"></div>
+            </div>
+          </div>
+
+          <div class="benefit-visual-card">
+            <div class="label" style="margin-bottom: 12px;">调控收益策略对比</div>
+            <div class="chart-wrap">
+              <div ref="benefitCompareChartRef" class="flex-page-chart flex-page-chart-benefit"></div>
+            </div>
+            <div class="benefit-chart-footnote">
+              纵轴为调控收益（元），横轴对比推荐策略与当前策略。
+            </div>
+          </div>
+          <div class="benefit-visual-card">
+            <div class="label" style="margin-bottom: 12px;">移峰填谷收益占调控收益比例</div>
+            <div class="chart-wrap">
+              <div ref="benefitShiftRatioChartRef" class="flex-page-chart flex-page-chart-benefit"></div>
+            </div>
+            <div class="benefit-chart-footnote">
+              移峰填谷贡献 {{ pageState.nextHourShiftBenefit.toFixed(0) }} 元，占比 {{ pageState.shiftContributionPercent.toFixed(0) }}%
+            </div>
+          </div>
+
+
         </div>
       </div>
 
-      <div class="benefit-chart-card">
-        <div class="benefit-chart-header">
-          <div class="label">{{ text.benefitBuild }}</div>
-          <div class="benefit-chart-chip">{{ "先看未来1小时收益" }}</div>
-        </div>
-        <div class="chart-wrap benefit-chart-wrap">
-          <div ref="benefitChartRef" class="flex-page-chart flex-page-chart-benefit"></div>
-        </div>
-        <div class="benefit-summary-strip">
-          <div class="benefit-summary-main">
-            <span>{{ "额外收益" }}</span>
-            <strong>{{ pageState.extraRevenue.toFixed(0) }} {{ "元" }}</strong>
-          </div>
-          <div class="benefit-summary-sub">
-            <span>{{ "未来1小时总收益" }}</span>
-            <strong>{{ pageState.nextHourTotalRevenue.toFixed(0) }} {{ "元" }}</strong>
-          </div>
-        </div>
-        <div class="benefit-note-list">
-          <div class="muted">{{ "基础收益：以最低保障功率持续运行形成的基线收益。" }}</div>
-          <div class="muted">{{ "额外收益：在基础收益之上，随着调控水平抬升而增加的增量收益。" }}</div>
-          <div class="muted">{{ "左侧展示未来1小时收益结构，右侧展示累计历史收益结构。" }}</div>
-        </div>
-      </div>
-
-      <div class="tou-card benefit-tou-card">
-        <div class="label" style="margin-bottom:12px;">{{ text.touTitle }}</div>
-        <div class="notes benefit-table-notes">
-          <div class="table-row header flex-table benefit-rate-header">
-            <span>{{ text.periodType }}</span>
-            <span>{{ text.periodRange }}</span>
-            <span>{{ text.mockPrice }}</span>
-          </div>
-          <div v-for="item in touTable" :key="item.type" class="table-row flex-table benefit-rate-row">
-            <strong
-                class="benefit-rate-type"
-                :class="item.type === '峰' ? 'peak' : item.type === '平' ? 'flat' : 'valley'"
+      <div class="benefit-side-column">
+        <div class="tou-card benefit-tou-card">
+          <div class="label" style="margin-bottom:12px;">{{ text.touTitle }}</div>
+          <div class="benefit-table-notes">
+            <div class="benefit-rate-header">
+              <span>{{ text.periodType }}</span>
+              <span>{{ text.periodRange }}</span>
+              <span>{{ text.mockPrice }}</span>
+            </div>
+            <div
+                v-for="item in touTable"
+                :key="item.type"
+                class="benefit-rate-row"
             >
-              {{ item.type }}
-            </strong>
-            <span class="benefit-rate-range">{{ item.range }}</span>
-            <span class="benefit-rate-price">{{ item.price.toFixed(2) }} {{ "元/kWh" }}</span>
+              <span
+                  class="benefit-rate-type"
+                  :class="item.type === '峰' ? 'peak' : item.type === '平' ? 'flat' : 'valley'"
+              >
+                {{ item.type }}
+              </span>
+              <span class="benefit-rate-range">{{ item.range }}</span>
+              <span class="benefit-rate-price">{{ item.price.toFixed(2) }} 元/kWh</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tou-card shift-benefit-card">
+          <div class="label" style="margin-bottom:12px;">移峰填谷收益说明</div>
+          <div class="shift-benefit-content">
+            <div class="shift-benefit-row">
+              <span class="shift-benefit-row-label">测算依据</span>
+              <p>测算依据：移峰电量 × 时段价差 + 容量优化带来的策略收益</p>
+            </div>
+          </div>
+          <div class="shift-benefit-meta">
+            <div class="shift-benefit-meta-item">
+              <span>预计移峰电量</span>
+              <strong>{{ shiftBenefitCard.shiftEnergy.toFixed(2) }} MWh</strong>
+            </div>
+            <div class="shift-benefit-meta-item">
+              <span>对应价差区间</span>
+              <strong>{{ shiftBenefitCard.route }}，价差 {{ shiftBenefitCard.priceDiff.toFixed(2) }} 元/kWh</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -1793,7 +2236,7 @@ onBeforeUnmount(() => {
 }
 
 .flex-table {
-  grid-template-columns: 58px minmax(0, 1fr) 98px;
+  grid-template-columns: 58px minmax(0, 1fr) 110px 90px;
 }
 
 .advisory-layout {
@@ -1886,6 +2329,43 @@ onBeforeUnmount(() => {
   padding: 20px;
 }
 
+
+.station-basic-extra {
+  margin-top: 18px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(205, 219, 238, 0.9);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.station-basic-extra-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.station-basic-extra-label {
+  color: #7a8da6;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.station-basic-extra strong {
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 800;
+  color: #1f4f97;
+  letter-spacing: -0.02em;
+}
+
+.station-basic-extra small {
+  color: #56708f;
+  font-size: 14px;
+}
 .station-basic-card {
   grid-column: auto;
 }
@@ -2242,6 +2722,13 @@ onBeforeUnmount(() => {
   box-shadow: 0 10px 24px rgba(38, 74, 118, 0.06);
 }
 
+.tou-card .label {
+  margin-bottom: 14px;
+  color: #17355c;
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .sim-toolbar {
   display: flex;
   justify-content: flex-end;
@@ -2261,6 +2748,276 @@ onBeforeUnmount(() => {
   flex-direction: column;
   min-height: 100%;
   height: 100%;
+}
+
+.flex-page-chart-gun-strategy {
+  height: 100%;
+  min-height: 360px;
+}
+
+.gun-strategy-section {
+  margin-top: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.strategy-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.strategy-section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #17355c;
+}
+
+.strategy-section-desc {
+  margin-top: 6px;
+  color: #6b7f98;
+  line-height: 1.7;
+}
+
+.strategy-overview-card,
+.strategy-principle-card,
+.strategy-chart-card,
+.strategy-detail-card,
+.strategy-dispatch-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(197, 214, 235, 0.8);
+  background: linear-gradient(180deg, rgba(249, 252, 255, 0.96), rgba(241, 247, 255, 0.88));
+  box-shadow: 0 10px 24px rgba(38, 74, 118, 0.06);
+}
+
+.strategy-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 10px;
+}
+
+.strategy-overview-item {
+  padding: 10px 14px;
+  position: relative;
+}
+
+.strategy-overview-item + .strategy-overview-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: rgba(197, 214, 235, 0.9);
+}
+
+.strategy-overview-item span,
+.strategy-overview-item small {
+  display: block;
+}
+
+.strategy-overview-item span {
+  color: #6b7f98;
+  font-size: 13px;
+}
+
+.strategy-overview-item strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+  color: #17355c;
+}
+
+.strategy-overview-item small {
+  margin-top: 8px;
+  color: #7b8ea8;
+  line-height: 1.6;
+}
+
+.strategy-principle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.strategy-principle-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.strategy-principle-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #17355c;
+}
+
+.strategy-principle-text {
+  margin-top: 10px;
+  color: #5e7591;
+  line-height: 1.8;
+}
+
+.strategy-chart-head,
+.strategy-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.strategy-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.strategy-toggle-group {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(225, 234, 246, 0.9);
+  gap: 4px;
+}
+
+.strategy-toggle {
+  border: 0;
+  background: transparent;
+  color: #54708f;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.strategy-toggle.active {
+  background: #2f6bff;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(47, 107, 255, 0.22);
+}
+
+.strategy-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.strategy-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.74);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.strategy-table th,
+.strategy-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(223, 231, 242, 0.95);
+  text-align: left;
+  color: #49627f;
+  font-size: 13px;
+}
+
+.strategy-table th {
+  background: rgba(235, 242, 251, 0.92);
+  color: #56708f;
+  font-weight: 700;
+}
+
+.strategy-table tbody tr {
+  cursor: pointer;
+}
+
+.strategy-table tbody tr.active,
+.strategy-table tbody tr:hover {
+  background: rgba(47, 107, 255, 0.06);
+}
+
+.strategy-table tfoot td {
+  color: #17355c;
+  font-weight: 700;
+  background: rgba(245, 249, 255, 0.92);
+}
+
+.priority-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.priority-tag.高 {
+  color: #2f6bff;
+  background: rgba(47, 107, 255, 0.12);
+}
+
+.priority-tag.中 {
+  color: #c97716;
+  background: rgba(222, 139, 55, 0.14);
+}
+
+.priority-tag.低 {
+  color: #7b8ea8;
+  background: rgba(145, 161, 185, 0.16);
+}
+
+.strategy-card-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.strategy-gun-card {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(223, 231, 242, 0.95);
+  cursor: pointer;
+}
+
+.strategy-gun-card.active {
+  border-color: rgba(47, 107, 255, 0.42);
+  box-shadow: 0 10px 22px rgba(47, 107, 255, 0.12);
+}
+
+.strategy-gun-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.strategy-gun-card-head strong {
+  color: #17355c;
+  font-size: 16px;
+}
+
+.strategy-gun-power {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #17355c;
+}
+
+.strategy-gun-power strong {
+  font-size: 18px;
+}
+
+.strategy-gun-meta,
+.strategy-gun-desc {
+  margin-top: 10px;
+  color: #5e7591;
+  line-height: 1.7;
 }
 
 .simulation-side-panel {
@@ -2319,6 +3076,47 @@ onBeforeUnmount(() => {
 
 .simulation-range-card {
   width: 100%;
+  position: sticky;
+  top: 10px;
+  z-index: 30;
+  background: linear-gradient(180deg, rgba(249, 252, 255, 0.98), rgba(241, 247, 255, 0.96));
+  box-shadow: 0 14px 28px rgba(38, 74, 118, 0.12);
+}
+
+.strategy-chart-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.strategy-chart-toggle-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(47, 107, 255, 0.08);
+  color: #2f6bff;
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.strategy-chart-toggle-icon.collapsed {
+  transform: rotate(180deg);
+}
+
+.collapsible-chart-wrap {
+  margin-top: 12px;
 }
 
 .sim-toggle-group {
@@ -2875,20 +3673,19 @@ onBeforeUnmount(() => {
 .benefit-tou-card {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .benefit-table-notes {
   display: grid;
-  grid-template-rows: auto repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto repeat(3, minmax(126px, 1fr));
   gap: 10px;
   flex: 1;
 }
 
 .benefit-rate-header {
   display: grid;
-  grid-template-columns: 58px minmax(0, 0.88fr) minmax(132px, 0.62fr);
-  padding: 0 10px;
+  grid-template-columns: 72px minmax(0, 1fr) minmax(160px, 0.68fr);
+  padding: 0 12px;
   color: #7c8fa8;
   font-size: 14px;
   font-weight: 600;
@@ -2898,11 +3695,12 @@ onBeforeUnmount(() => {
 
 .benefit-rate-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 0.88fr) minmax(132px, 0.62fr);
+  grid-template-columns: 72px minmax(0, 1fr) minmax(160px, 0.68fr);
   align-items: center;
-  padding: 15px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(210, 220, 235, 0.9);
+  padding: 20px 22px;
+  min-height: 108px;
+  border-radius: 16px;
+  border: 1px solid rgba(210, 220, 235, 0.92);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.94));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   text-align: center;
@@ -2915,7 +3713,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 20px;
   font-weight: 700;
 }
@@ -2945,9 +3743,167 @@ onBeforeUnmount(() => {
 
 .benefit-rate-price {
   color: #17355c;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   text-align: center;
+}
+
+
+.benefit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.62fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.benefit-main-card {
+  height: 100%;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(197, 214, 235, 0.8);
+  background: linear-gradient(180deg, rgba(249, 252, 255, 0.96), rgba(241, 247, 255, 0.88));
+  box-shadow: 0 10px 24px rgba(38, 74, 118, 0.06);
+}
+
+.benefit-core-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.benefit-core-card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(197, 214, 235, 0.7);
+}
+
+.benefit-core-card .label {
+  color: #6b7f98;
+  font-size: 14px;
+}
+
+.benefit-core-card .value {
+  margin-top: 8px;
+  color: #245dff;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.benefit-core-card .muted {
+  margin-top: 8px;
+  color: #5f7795;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.benefit-core-desc {
+  margin-top: 10px;
+  color: #5f7693;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.benefit-visual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.benefit-visual-card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(197, 214, 235, 0.7);
+}
+
+.benefit-chart-footnote {
+  margin-top: 10px;
+  color: #6b7f98;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.benefit-side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  align-items: stretch;
+}
+
+.shift-benefit-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.shift-benefit-content {
+  display: grid;
+  gap: 12px;
+}
+
+.shift-benefit-row {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(210, 220, 235, 0.88);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.shift-benefit-row.highlight {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(230, 239, 255, 0.92));
+  border-color: rgba(127, 180, 142, 0.38);
+}
+
+.shift-benefit-row-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #6b7f98;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.shift-benefit-row p {
+  margin: 0;
+  color: #314962;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.shift-benefit-row strong {
+  color: #245dff;
+}
+
+.shift-benefit-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: auto;
+}
+
+.shift-benefit-meta-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(205, 219, 238, 0.9);
+}
+
+.shift-benefit-meta-item span {
+  display: block;
+  color: #6b7f98;
+  font-size: 13px;
+}
+
+.shift-benefit-meta-item strong {
+  display: block;
+  margin-top: 6px;
+  color: #17355c;
+  font-size: 18px;
+  line-height: 1.4;
 }
 
 @media (max-width: 720px) {
@@ -2957,6 +3913,9 @@ onBeforeUnmount(() => {
   .history-layout,
   .simulation-content-grid,
   .benefit-layout,
+  .benefit-core-grid,
+  .benefit-visual-grid,
+  .benefit-side-column,
   .advisory-layout,
   .advisory-left-stack,
   .advisory-grid,

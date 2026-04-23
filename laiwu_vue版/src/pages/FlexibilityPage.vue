@@ -114,7 +114,7 @@ const text = {
 const stationFallback = {
   name: "张家洼新建充电站",
   region: "莱芜区张家洼街道",
-  voltageLevel: "10-15 kV",
+  voltageLevel: "10kV",
   ratedPower: 15,
   contractUpper: 15,
   minimumGuarantee: 10,
@@ -127,9 +127,14 @@ const stationFallback = {
   operationStatus: "正常运行",
   currentLoad: 12.8,
   currentUse: 82,
-  accessRange: "10-15 kV",
+  accessRange: "1000-1500 kVA",
   minAccessPeriod: "18:00-22:00",
-  maxAccessSuggestion: "15 kV"
+  maxAccessSuggestion: "1500 kVA",
+  declaredCapacity: 1500,
+  pileCount: 8,
+  pileMaxPower: 180,
+  gunPerPile: "一桩一枪",
+  powerFactor: 1
 };
 
 const pageView = ref("afternoon");
@@ -160,10 +165,10 @@ const pageViewConfigs = {
     futureAvailable: [null, null, null, null, null, 13.08, 13.02, 12.94, 12.88, 12.96, 13.14, 13.42, 13.76],
     controlledTemplate: [13.04, 13.18, 13.36, 13.62, 13.86, 14.04, 13.82, 13.28],
     dailyStrategies: [
-      { label: "00:00-08:00", value: "10-12 kV", desc: "夜间保持基础接入。" },
-      { label: "08:00-18:00", value: "10-13 kV", desc: "日间按中位范围平稳运行。" },
-      { label: "18:00-22:00", value: "10-15 kV", desc: "重点窗口内按建议边界组织接入。" },
-      { label: "22:00-24:00", value: "12-15 kV", desc: "夜间恢复后逐步抬升至建议上限。" }
+      { label: "00:00 - 08:00", value: "1000 - 1200 kW", desc: "夜间谷段，保持基础负荷运行。" },
+      { label: "08:00 - 18:00", value: "1000 - 1300 kW", desc: "日间平时段，按中位范围平稳运行。", highlight: true },
+      { label: "18:00 - 22:00", value: "1000 - 1500 kW", desc: "晚高峰重点窗口，允许按最大能力接入。" },
+      { label: "22:00 - 24:00", value: "1200 - 1500 kW", desc: "夜间负荷恢复，逐步抬升至建议上限。" }
     ],
     touTable: [
       { type: "峰", range: "14:00-18:00", price: 1.25, factor: 0.62, slots: ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"] },
@@ -193,10 +198,10 @@ const pageViewConfigs = {
     futureAvailable: [null, null, null, null, null, 13.14, 13.42, 13.76, 13.88, 13.96, 14.02, 14.08, 14.12],
     controlledTemplate: [13.82, 13.28, 13.08, 12.96, 12.88, 12.78, 12.66, 12.58],
     dailyStrategies: [
-      { label: "00:00-08:00", value: "10-12 kV", desc: "夜间维持基础服务保障。" },
-      { label: "08:00-16:30", value: "10-13 kV", desc: "白天按中位接入能力平稳运行。" },
-      { label: "16:30-20:30", value: "10-15 kV", desc: "晚高峰窗口执行重点调控与接入协同。" },
-      { label: "20:30-24:00", value: "11-14 kV", desc: "高峰回落后逐步恢复常态运行。" }
+      { label: "00:00 - 08:00", value: "1000 - 1200 kW", desc: "夜间谷段，保持基础负荷运行。" },
+      { label: "08:00 - 18:00", value: "1000 - 1300 kW", desc: "日间平时段，按中位范围平稳运行。", highlight: true },
+      { label: "18:00 - 22:00", value: "1000 - 1500 kW", desc: "晚高峰重点窗口，允许按最大能力接入。" },
+      { label: "22:00 - 24:00", value: "1200 - 1500 kW", desc: "夜间负荷恢复，逐步抬升至建议上限。" }
     ],
     touTable: [
       { type: "峰", range: "16:30-19:30", price: 1.28, factor: 0.64, slots: ["16:30", "17:00", "17:30", "18:00", "18:30", "19:00"] },
@@ -223,7 +228,6 @@ const gunStrategyChartCollapsed = ref(false);
 const historyHoverCard = ref({ visible: false, mode: "line", x: 0, y: 0, title: "", label: "", value: "", desc: "" });
 const simulationHoverCard = ref({ visible: false, mode: "line", x: 0, y: 0, title: "", label: "", value: "", desc: "" });
 
-// 当前操作员设定的目标限峰值，页面所有摘要指标和仿真图都由它联动。
 const limitPower = ref(activeViewConfig.value.initialLimit);
 const sliderHovering = ref(false);
 
@@ -235,7 +239,6 @@ function updateLimitPower(rawValue) {
       2
   );
 }
-// 仿真图区的展示模式：展示调控前、调控后或两者同时展示。
 const simulationMode = ref("both");
 
 const stationInfo = computed(() => {
@@ -257,7 +260,12 @@ const stationInfo = computed(() => {
     currentUse: Number(activeViewConfig.value.station.currentUse),
     accessRange: activeViewConfig.value.station.accessRange,
     minAccessPeriod: activeViewConfig.value.station.minAccessPeriod,
-    maxAccessSuggestion: activeViewConfig.value.station.maxAccessSuggestion
+    maxAccessSuggestion: activeViewConfig.value.station.maxAccessSuggestion,
+    declaredCapacity: Number(activeViewConfig.value.station.declaredCapacity),
+    pileCount: Number(activeViewConfig.value.station.pileCount),
+    pileMaxPower: Number(activeViewConfig.value.station.pileMaxPower),
+    gunPerPile: activeViewConfig.value.station.gunPerPile,
+    powerFactor: Number(activeViewConfig.value.station.powerFactor)
   };
 });
 
@@ -290,19 +298,22 @@ const fixedAdvice = computed(() => {
     desc: text.adviceDesc,
     strategyIntro: text.adviceIntro,
     scopeText: text.adviceScope,
-    stationStrategy:
-        pageView.value === "afternoon"
-            ? "按 10-15 kV 接入口径展示，18:00-22:00 作为重点接入窗口，日常按建议边界执行。"
-            : "按 10-15 kV 接入口径展示，16:30 起进入晚高峰调控口径，重点兼顾限峰与收益协同。",
+    stationSummary: "展示充电站基础接入信息、容量边界与典型运行策略。",
+    basicInfoItems: [
+      // { label: "站点名称", value: stationInfo.value.name },
+      { label: "接入电压等级", value: stationInfo.value.voltageLevel },
+      { label: "充电站报装容量", value: `${stationInfo.value.declaredCapacity} kVA` },
+      { label: "充电桩个数", value: `${stationInfo.value.pileCount} 个` },
+      { label: "单桩最大功率", value: `${stationInfo.value.pileMaxPower} kW` },
+      { label: "充电枪配置", value: `${stationInfo.value.gunPerPile}（共 ${stationInfo.value.fast + stationInfo.value.slow} 枪）` },
+      { label: "功率因数", value: `${stationInfo.value.powerFactor}（功率因数按 1.0 取值时，1 kVA≈1 kW）` },
+      // { label: "容量换算说明", value: "功率因数按 1.0 取值时，1 kVA≈1 kW。" }
+    ],
     powerBounds: {
-      ratedPower: stationInfo.value.ratedPower,
-      minimumGuarantee: stationInfo.value.minimumGuarantee,
-      contractUpper: stationInfo.value.contractUpper,
-      accessRange: stationInfo.value.accessRange,
-      minAccessPeriod: stationInfo.value.minAccessPeriod,
-      maxAccessSuggestion: stationInfo.value.maxAccessSuggestion,
-      rangeStart: "10 kV",
-      rangeEnd: "15 kV"
+      title: "充电站容量",
+      max: "1500 kVA",
+      min: "1000 kVA",
+      desc: "充电站最大容量允许在 1000-1500 kVA 区间内变化。"
     },
     dailyStrategies: {
       title: "日常调控策略",
@@ -409,7 +420,6 @@ function getSeriesDescription(name) {
     [text.historyAvailable]: "配网在对应时刻可提供给站点的可用容量。",
     [text.minGuaranteeLine]: "保障基础充电服务必须维持的最低功率线。",
     [text.maxPowerLine]: "当前站点按接入条件允许达到的最大功率边界。",
-    // [text.targetLine]: "历史分析中用于判断限峰强度的目标控制线。",
     [text.beforeTargetLine]: "未调控场景下的目标限峰基准线。",
     [text.afterTargetLine]: "调控执行后的目标限峰线。",
     [text.uncontrolledForecast]: "不采取调控时的未来负荷预测。",
@@ -597,7 +607,6 @@ function buildControlledForecast(limitMw) {
   });
 }
 
-
 function calculateFutureHourBenefit(controlledSeries) {
   const currentIndex = simulationCurrentIndex.value;
   const nextHourLabels = simulationLabels.value.slice(currentIndex, Math.min(simulationLabels.value.length, currentIndex + 3));
@@ -744,7 +753,6 @@ const gunStrategyDispatchSummary = computed(() => {
 
 const pageState = computed(() => {
   const currentIndex = simulationCurrentIndex.value;
-  // 百分比按“相对最低保障功率提升了多少”来算，便于操作员理解当前放开的力度。
   const growthFromMinimumPercent = round(
       stationInfo.value.minimumGuarantee > 0
           ? ((limitPower.value - stationInfo.value.minimumGuarantee) / stationInfo.value.minimumGuarantee) * 100
@@ -755,7 +763,6 @@ const pageState = computed(() => {
   const currentAvailable = round(historyAvailable.value[historyAvailable.value.length - 1] ?? 13.12, 2);
   const currentLoad = round(historyActual.value[historyActual.value.length - 1] ?? 12.86, 2);
   const currentDelta = round(currentAvailable - currentLoad, 2);
-  // const targetLineHistory = buildTargetLineSeries(historyActual.value, historyAvailable.value, Math.min(limitPower.value, currentAvailable - 0.12));
 
   const controlledForecast = buildControlledForecast(limitPower.value);
 
@@ -783,7 +790,6 @@ const pageState = computed(() => {
   const recentAverageLoad = round(sum(recentHistoryActual) / Math.max(recentHistoryActual.length, 1), 2);
   const recentAverageAvailable = round(sum(recentHistoryAvailable) / Math.max(recentHistoryAvailable.length, 1), 2);
 
-  // 历史柔性收益：历史真实负荷中高于最低保障功率的部分，按分时收益系数粗略估算。
   const historyFlexibleRevenue = round(
       historyLabels.value.reduce((total, label, index) => {
         const adjustableLoad = Math.max(0, historyActual.value[index] - stationInfo.value.minimumGuarantee);
@@ -792,7 +798,6 @@ const pageState = computed(() => {
       }, 0),
       2
   );
-  // 基础收益：假设站点始终只提供最低保障功率时可获得的历史基础收入。
   const baseRevenue = round(
       historyLabels.value.reduce((total, label) => {
         const rule = getTouRule(label);
@@ -930,7 +935,6 @@ const pageState = computed(() => {
     sliderRecommendedLeftPercent,
     sliderRecommendedWidthPercent,
     sliderRecommendedRightPercent,
-    // targetLineHistory,
     controlledForecast,
     currentAvailable,
     currentLoad,
@@ -1082,34 +1086,6 @@ function renderHistoryChart() {
         },
         z: 1
       },
-//       {
-//         name: text.targetLine,
-//         type: "line",
-//         triggerLineEvent: true,
-//         smooth: true,
-//         data: pageState.value.targetLineHistory,
-//         symbol: "triangle",
-//         symbolSize: 7,
-//         lineStyle: { width: 3.4, color: "#de8d36", type: "solid" },
-//         itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
-//         markLine: {
-//           silent: true,
-//           symbol: ["none", "none"],
-//           lineStyle: { color: "#8ea1b8", type: "dashed", width: 1.6 },
-//           label: {
-//             show: true,
-//             formatter: `${text.currentTime}
-// ${historyLabels.value[historyLabels.value.length - 1]}`,
-//             position: "insideEndTop",
-//             color: "#4f6480",
-//             backgroundColor: "rgba(255,255,255,0.92)",
-//             padding: [4, 6],
-//             borderRadius: 4
-//           },
-//           data: [{ xAxis: historyLabels.value[historyLabels.value.length - 1] }]
-//         },
-//         z: 4
-//       }
     ]
   });
 }
@@ -1228,18 +1204,6 @@ ${currentTime}`,
       itemStyle: { color: "#4aa37b", borderColor: "#ffffff", borderWidth: 2 },
       z: 4
     },
-    // {
-    //   name: text.targetLine,
-    //   type: "line",
-    //   triggerLineEvent: true,
-    //   smooth: true,
-    //   data: simulationHistoryTarget.value,
-    //   symbol: "triangle",
-    //   symbolSize: 8,
-    //   lineStyle: { width: 3.2, color: "#de8d36", type: "solid" },
-    //   itemStyle: { color: "#de8d36", borderColor: "#ffffff", borderWidth: 2 },
-    //   z: 4
-    // },
     {
       name: text.futureAvailable,
       type: "line",
@@ -1667,54 +1631,62 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="advisory-grid">
-        <div class="advisory-card station-basic-card">
+        <div class="advisory-card station-basic-card merged-info-card">
           <div class="mini-label">{{ text.basicInfo }}</div>
           <div class="station-name">{{ stationInfo.name }}</div>
-          <div class="station-basic-inline">{{ fixedAdvice.stationStrategy }}</div>
-          <div class="station-basic-inline">
-            <span class="station-basic-extra-label">充电枪数量：</span>
-            <span>{{ stationInfo.fast + stationInfo.slow }}</span>
-          </div>
-
-          <div class="station-basic-inline">
-            <small>快充{{ stationInfo.fast }}/慢充{{ stationInfo.slow }}</small>
-          </div>
-        </div>
-
-        <div class="advisory-card power-card">
-          <div class="mini-label">{{ "功率边界" }}</div>
-          <div class="power-bound-grid">
+          <div class="station-basic-inline">{{ fixedAdvice.stationSummary }}</div>
+          <div class="merged-info-layout">
             <div>
-              <span class="metric-label">{{ "接入范围" }}</span>
-              <div class="metric-value">{{ fixedAdvice.powerBounds.accessRange }}</div>
+              <div class="basic-grid station-basic-grid">
+                <div v-for="item in fixedAdvice.basicInfoItems" :key="item.label" class="basic-item">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </div>
             </div>
-            <div>
-              <span class="metric-label">{{ "最大接入建议" }}</span>
-              <div class="metric-value">{{ fixedAdvice.powerBounds.maxAccessSuggestion }}</div>
+            <div class="capacity-side-block">
+              <div class="mini-label small">{{ fixedAdvice.powerBounds.title }}</div>
+              <div class="power-bound-grid">
+                <div class="basic-item">
+                  <span class="metric-label">最大容量</span>
+                  <div class="metric-value">{{ fixedAdvice.powerBounds.max }}</div>
+                </div>
+                <div class="basic-item">
+                  <span class="metric-label">最小容量</span>
+                  <div class="metric-value">{{ fixedAdvice.powerBounds.min }}</div>
+                </div>
+              </div>
+              <div class="power-track power-capacity-track">
+                <span class="left">1000 kVA</span>
+                <div class="track-line"><i></i></div>
+                <span class="right">1500 kVA</span>
+              </div>
+              <div class="station-basic-inline muted">{{ fixedAdvice.powerBounds.desc }}</div>
             </div>
           </div>
-          <div class="power-track">
-            <span class="left">{{ fixedAdvice.powerBounds.rangeStart }}</span>
-            <div class="track-line"><i></i></div>
-            <span class="right">{{ fixedAdvice.powerBounds.rangeEnd }}</span>
-          </div>
-          <div class="muted">{{ "当前按" }} {{ fixedAdvice.powerBounds.accessRange }} {{ "边界进行展示。" }}</div>
         </div>
 
         <div class="advisory-card compact-detail-card">
           <div class="mini-label">{{ fixedAdvice.dailyStrategies.title }}</div>
           <div class="strategy-compact-list">
-            <div v-for="item in fixedAdvice.dailyStrategies.items" :key="item.label" class="strategy-compact-row">
+            <div
+                v-for="item in fixedAdvice.dailyStrategies.items"
+                :key="item.label"
+                class="strategy-compact-row"
+                :class="{ active: item.highlight }"
+            >
               <span class="strategy-time">{{ item.label }}</span>
               <strong class="strategy-range">{{ item.value }}</strong>
-              <span class="strategy-note">{{ item.desc }}</span>
+              <span class="strategy-note">
+                {{ item.desc }}
+                <em v-if="item.highlight">（当前时段）</em>
+              </span>
             </div>
           </div>
         </div>
       </div>
     </div>
   </CollapsiblePanel>
-
 
   <CollapsiblePanel class="section" :title="text.sectionHistory" :desc="text.sectionHistoryDesc">
     <section class="dual-grid history-layout" style="margin-top:0;">
@@ -2161,7 +2133,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-
         </div>
       </div>
 
@@ -2186,7 +2157,7 @@ onBeforeUnmount(() => {
                 {{ item.type }}
               </span>
               <span class="benefit-rate-range">{{ item.range }}</span>
-              <span class="benefit-rate-price">{{ item.price.toFixed(2) }} 元/kWh</span>
+              <span class="benefit-rate-price">{{ item.price.toFixed(2) }} 元/kVA</span>
             </div>
           </div>
         </div>
@@ -2206,7 +2177,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="shift-benefit-meta-item">
               <span>对应价差区间</span>
-              <strong>{{ shiftBenefitCard.route }}，价差 {{ shiftBenefitCard.priceDiff.toFixed(2) }} 元/kWh</strong>
+              <strong>{{ shiftBenefitCard.route }}，价差 {{ shiftBenefitCard.priceDiff.toFixed(2) }} 元/kVA</strong>
             </div>
           </div>
         </div>
@@ -2325,10 +2296,6 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
-.power-card {
-  padding: 20px;
-}
-
 
 .station-basic-extra {
   margin-top: 18px;
@@ -2367,22 +2334,54 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 .station-basic-card {
-  grid-column: auto;
+  grid-column: span 2;
+}
+
+.merged-info-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.merged-info-layout {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.capacity-side-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mini-label.small {
+  align-self: flex-start;
+}
+
+.station-basic-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .compact-detail-card {
   min-height: 128px;
+  display: flex;
+  flex-direction: column;
 }
 
 .strategy-compact-list {
   margin-top: 14px;
   display: grid;
   gap: 8px;
+  flex: 1;
+  align-content: center;
 }
 
 .strategy-compact-row {
   display: grid;
-  grid-template-columns: 92px 84px minmax(0, 1fr);
+  grid-template-columns: 92px 112px minmax(0, 160px);
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   padding: 8px 0;
@@ -2394,6 +2393,13 @@ onBeforeUnmount(() => {
   padding-bottom: 0;
 }
 
+.strategy-compact-row.active {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(47, 107, 255, 0.18);
+  background: rgba(47, 107, 255, 0.08);
+}
+
 .strategy-time {
   color: #5f7692;
   font-size: 13px;
@@ -2403,17 +2409,29 @@ onBeforeUnmount(() => {
   color: #17355c;
   font-size: 15px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .strategy-note {
   color: #6c829b;
   font-size: 12px;
   line-height: 1.5;
+  max-width: 160px;
+}
+
+.strategy-note em {
+  margin-left: 6px;
+  color: #2f6bff;
+  font-style: normal;
+  font-weight: 600;
 }
 
 .mini-label {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: max-content;
   padding: 4px 10px;
   border-radius: 999px;
   background: rgba(47, 107, 255, 0.1);
@@ -2741,7 +2759,6 @@ onBeforeUnmount(() => {
   z-index: 6;
   margin-bottom: 0;
 }
-
 
 .simulation-main-panel {
   display: flex;
@@ -3748,7 +3765,6 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-
 .benefit-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.62fr);
@@ -3922,8 +3938,22 @@ onBeforeUnmount(() => {
   .advisory-rule-bar,
   .basic-grid,
   .power-bound-grid,
+  .merged-info-layout,
   .flex-table {
     grid-template-columns: 1fr;
+  }
+
+
+  .station-basic-card {
+    grid-column: auto;
+  }
+
+  .strategy-compact-row {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-note {
+    max-width: none;
   }
 
   .status-pill-row {

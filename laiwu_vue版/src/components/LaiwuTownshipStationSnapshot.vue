@@ -152,9 +152,9 @@ const townshipSummary = computed(() =>
             resourceName: zone?.resourceName || `${item.name}10kV资源点`,
             accessMode: zone?.accessMode || (resourceCount > 1 ? "多站并联接入" : "单站接入"),
             remark: zone?.remark || toneConfig[tone].desc,
-            totalCapacity: zone?.totalCapacity || `${resourceCount * 10} kV`,
-            usedCapacity: zone?.usedCapacity || `${resourceCount * 4} kV`,
-            reserveCapacity: zone?.reserveCapacity || `${resourceCount * 6} kV`,
+            totalCapacity: zone?.totalCapacity || `${resourceCount * 10} kVA`,
+            usedCapacity: zone?.usedCapacity || `${resourceCount * 4} kVA`,
+            reserveCapacity: zone?.reserveCapacity || `${resourceCount * 6} kVA`,
             stationIds: zone?.stationIds || relatedStations.map((station) => station.id)
           };
         })
@@ -214,8 +214,8 @@ const toneDetailSummary = computed(() => {
     townshipCount: items.length,
     totalStations,
     totalResources,
-    totalUsed: `${totalUsed.toFixed(0)} kV`,
-    totalReserve: `${totalReserve.toFixed(0)} kV`,
+    totalUsed: `${totalUsed.toFixed(0)} kVA`,
+    totalReserve: `${totalReserve.toFixed(0)} kVA`,
     examples: items.slice(0, 5)
   };
 });

@@ -21,9 +21,9 @@ const siteResourceZones = [
     resourceName: "凤城核心片区10kV资源",
     label: "红色低剩余资源区",
     accessMode: "多站并联接入，当前 10kV 剩余量偏紧",
-    totalCapacity: "30 kV",
-    usedCapacity: "22 kV",
-    reserveCapacity: "8 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "22 kVA",
+    reserveCapacity: "8 kVA",
     remark: "城区片区虽然有 3 组间隔资源，但已接出占用较高，因此剩余总量偏少"
   },
   {
@@ -33,9 +33,9 @@ const siteResourceZones = [
     resourceName: "鹏泉综合片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "2 组资源协同，支持单站扩容和预留接入",
-    totalCapacity: "20 kV",
-    usedCapacity: "9 kV",
-    reserveCapacity: "11 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "9 kVA",
+    reserveCapacity: "11 kVA",
     remark: "社区与园区混合负荷，当前仍保留一定 10kV 剩余量，处于黄色中位。"
   },
   {
@@ -45,9 +45,9 @@ const siteResourceZones = [
     resourceName: "高庄开发区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "2 组资源分区接入，可承接现有站和后续快充扩建",
-    totalCapacity: "20 kV",
-    usedCapacity: "10 kV",
-    reserveCapacity: "10 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "10 kVA",
+    reserveCapacity: "10 kVA",
     remark: "开发区接入负荷增长较快，现状仍有中等规模 10kV 剩余量。"
   },
   {
@@ -57,9 +57,9 @@ const siteResourceZones = [
     resourceName: "张家洼工业片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "1 主 1 备双间隔接入",
-    totalCapacity: "20 kV",
-    usedCapacity: "8 kV",
-    reserveCapacity: "12 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "8 kVA",
+    reserveCapacity: "12 kVA",
     remark: "工业周边补能需求稳定，当前剩余量中等，适合继续观察。"
   },
   {
@@ -69,9 +69,9 @@ const siteResourceZones = [
     resourceName: "口镇高速服务区10kV资源",
     label: "红色低剩余资源区",
     accessMode: "多站接入，大功率场景下 10kV 剩余量偏紧",
-    totalCapacity: "30 kV",
-    usedCapacity: "24 kV",
-    reserveCapacity: "6 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "24 kVA",
+    reserveCapacity: "6 kVA",
     remark: "高速服务区已有较多接出使用，虽然资源点不少，但剩余总量已经偏少。"
   },
   {
@@ -81,9 +81,9 @@ const siteResourceZones = [
     resourceName: "和庄预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留，适合后续多站接入",
-    totalCapacity: "30 kV",
-    usedCapacity: "7 kV",
-    reserveCapacity: "23 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "7 kVA",
+    reserveCapacity: "23 kVA",
     remark: "整体接出较少，剩余总量充足，可作为后续乡镇新建站的重点接入区。"
   },
   {
@@ -93,9 +93,9 @@ const siteResourceZones = [
     resourceName: "寨里预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留，可支持后续站点成片接入",
-    totalCapacity: "30 kV",
-    usedCapacity: "9 kV",
-    reserveCapacity: "21 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "9 kVA",
+    reserveCapacity: "21 kVA",
     remark: "区域需求仍在培育期，已接出占用不高，因此剩余总量较高。"
   },
   {
@@ -105,9 +105,9 @@ const siteResourceZones = [
     resourceName: "苗山预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "10 kV",
-    reserveCapacity: "20 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "10 kVA",
+    reserveCapacity: "20 kVA",
     remark: "现阶段接出使用较少，适合为后续新站和扩站预留容量。"
   },
   {
@@ -117,9 +117,9 @@ const siteResourceZones = [
     resourceName: "大王庄预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "12 kV",
-    reserveCapacity: "18 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "12 kVA",
+    reserveCapacity: "18 kVA",
     remark: "示范期内站点少，已接出负荷低，因此 10kV 剩余量较大。"
   },
   {
@@ -129,9 +129,9 @@ const siteResourceZones = [
     resourceName: "杨庄预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "11 kV",
-    reserveCapacity: "19 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "11 kVA",
+    reserveCapacity: "19 kVA",
     remark: "资源总量较高，且当前接出占用不大，适合作为高剩余资源点。"
   },
   {
@@ -141,9 +141,9 @@ const siteResourceZones = [
     resourceName: "方下物流片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "双间隔接入，便于物流站点后续扩容",
-    totalCapacity: "20 kV",
-    usedCapacity: "9 kV",
-    reserveCapacity: "11 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "9 kVA",
+    reserveCapacity: "11 kVA",
     remark: "物流走廊负荷有增长趋势，当前剩余量处于中间区间。"
   },
   {
@@ -153,9 +153,9 @@ const siteResourceZones = [
     resourceName: "茶业口预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "9 kV",
-    reserveCapacity: "21 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "9 kVA",
+    reserveCapacity: "21 kVA",
     remark: "旅游季节性较强，但当前接出较少，10kV 剩余量高。"
   },
   {
@@ -165,9 +165,9 @@ const siteResourceZones = [
     resourceName: "雪野旅游片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "双间隔接入，支持景区和服务区分开供电",
-    totalCapacity: "20 kV",
-    usedCapacity: "8 kV",
-    reserveCapacity: "12 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "8 kVA",
+    reserveCapacity: "12 kVA",
     remark: "考虑旅游出行波动，现状剩余量仍有一定弹性，但未达到绿色区。"
   },
   {
@@ -177,9 +177,9 @@ const siteResourceZones = [
     resourceName: "羊里预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "10 kV",
-    reserveCapacity: "20 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "10 kVA",
+    reserveCapacity: "20 kVA",
     remark: "当前剩余资源充足，可满足首站接入并保留后续扩建空间。"
   },
   {
@@ -189,9 +189,9 @@ const siteResourceZones = [
     resourceName: "牛泉工贸片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "双间隔接入，可兼顾工贸和周边乡镇需求",
-    totalCapacity: "20 kV",
-    usedCapacity: "9 kV",
-    reserveCapacity: "11 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "9 kVA",
+    reserveCapacity: "11 kVA",
     remark: "工贸运输需求有增长预期，当前剩余量仍可支持后续新增接入。"
   },
   {
@@ -201,9 +201,9 @@ const siteResourceZones = [
     resourceName: "艾山钢城片区10kV资源",
     label: "红色低剩余资源区",
     accessMode: "多站接入，10kV 剩余量偏紧",
-    totalCapacity: "20 kV",
-    usedCapacity: "15 kV",
-    reserveCapacity: "5 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "15 kVA",
+    reserveCapacity: "5 kVA",
     remark: "钢城片区负荷高，虽然有 2 组资源，但已接出较多，剩余量依然偏低。"
   },
   {
@@ -213,9 +213,9 @@ const siteResourceZones = [
     resourceName: "汶源枢纽片区10kV资源",
     label: "红色低剩余资源区",
     accessMode: "双资源接入，现状扩容空间有限",
-    totalCapacity: "20 kV",
-    usedCapacity: "16 kV",
-    reserveCapacity: "4 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "16 kVA",
+    reserveCapacity: "4 kVA",
     remark: "汶源是钢城区核心示范区，当前协议剩余量最紧张，因此划为红区。"
   },
   {
@@ -225,9 +225,9 @@ const siteResourceZones = [
     resourceName: "里辛工业片区10kV资源",
     label: "黄色中剩余资源区",
     accessMode: "双间隔接入",
-    totalCapacity: "20 kV",
-    usedCapacity: "8 kV",
-    reserveCapacity: "12 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "8 kVA",
+    reserveCapacity: "12 kVA",
     remark: "中近期适合新增站点，当前 10kV 剩余量处于中位。"
   },
   {
@@ -237,9 +237,9 @@ const siteResourceZones = [
     resourceName: "颜庄预留10kV资源",
     label: "绿色高剩余资源区",
     accessMode: "3 组资源预留",
-    totalCapacity: "30 kV",
-    usedCapacity: "10 kV",
-    reserveCapacity: "20 kV",
+    totalCapacity: "30 kVA",
+    usedCapacity: "10 kVA",
+    reserveCapacity: "20 kVA",
     remark: "保持高剩余资源预留状态，待需求进一步提升后分步接入。"
   },
   {
@@ -249,9 +249,9 @@ const siteResourceZones = [
     resourceName: "辛庄增长片区10kV资源",
     label: "红色低剩余资源区",
     accessMode: "双资源接入，增长片区剩余量偏紧",
-    totalCapacity: "20 kV",
-    usedCapacity: "15 kV",
-    reserveCapacity: "5 kV",
+    totalCapacity: "20 kVA",
+    usedCapacity: "15 kVA",
+    reserveCapacity: "5 kVA",
     remark: "需求增速快，虽然有两路资源接入，但已接出占比高，因此剩余量偏紧。"
   }
 ];
@@ -261,26 +261,26 @@ const townshipResourceMappings = {
     {
       id: "zhangjiawa-resource-1",
       name: "张家洼10kV资源1号",
-      reserveCapacity: "7.5 kV",
-      accessMode: "接入充电站一座/10kV",
-      remark: "张家洼莱北充电站使用资源点 1，站点侧两路资源合计 15kV。",
+      reserveCapacity: "7.5 kVA",
+      accessMode: "接入充电站一座/10kVA",
+      remark: "张家洼莱北充电站使用资源点 1，站点侧两路资源合计 15kVA。",
       stationIds: ["laibei"]
     },
     {
       id: "zhangjiawa-resource-2",
       name: "张家洼10kV资源2号",
-      reserveCapacity: "7.5 kV",
-      accessMode: "接入充电站一座/10kV",
-      remark: "张家洼莱北充电站使用资源点 2，与资源点 1 合计形成 15kV 站点接入能力。",
+      reserveCapacity: "7.5 kVA",
+      accessMode: "接入充电站一座/10kVA",
+      remark: "张家洼莱北充电站使用资源点 2，与资源点 1 合计形成 15kVA 站点接入能力。",
       stationIds: ["laibei"]
     },
     {
       id: "zhangjiawa-resource-3",
       name: "张家洼10kV资源3号",
-      reserveCapacity: "5.0 kV",
+      reserveCapacity: "5.0 kVA",
       accessMode: "民生负荷保障",
-      remark: "该资源点用于民生用电，当前按 5kV 保障，不接入充电站。",
-      connectedLabel: "民生负荷 5kV"
+      remark: "该资源点用于民生用电，当前按 5kVA 保障，不接入充电站。",
+      connectedLabel: "民生负荷 5kVA"
     }
   ]
 };
@@ -426,8 +426,8 @@ const flexibleControlAreas = computed(() =>
           );
 
           const stationStrategies = relatedStations.map((station, stationIndex) => {
-            const protocolCap = `${Number((baseCap + stationIndex * 0.3).toFixed(1))} kV`;
-            const nightCap = `${Number((baseCap + reserve / Math.max(relatedStations.length, 2) + 1.2).toFixed(1))} kV`;
+            const protocolCap = `${Number((baseCap + stationIndex * 0.3).toFixed(1))} kVA`;
+            const nightCap = `${Number((baseCap + reserve / Math.max(relatedStations.length, 2) + 1.2).toFixed(1))} kVA`;
             const reduceHour = stationIndex % 2 === 0 ? "18:00" : "10:00";
             const stationShortName = station.mapLabel || station.name.replace("充电站", "");
 
@@ -440,7 +440,7 @@ const flexibleControlAreas = computed(() =>
               protocolCap,
               nightCap,
               maxAccessText: `协议按 ${protocolCap} 接入，22:00 后可上浮至 ${nightCap}`,
-              reduceText: `${reduceHour} 前后建议降至 ${Number((baseCap - 0.4).toFixed(1))} kV，释放同区资源余量`
+              reduceText: `${reduceHour} 前后建议降至 ${Number((baseCap - 0.4).toFixed(1))} kVA，释放同区资源余量`
             };
           });
 
@@ -551,9 +551,9 @@ const flexibleControlAreasV2 = computed(() =>
           stationShortName,
           lng: station.lng,
           lat: station.lat,
-          protocolCap: `${protocolCapValue} kV`,
+          protocolCap: `${protocolCapValue} kVA`,
           usageSeries,
-          usageRange: `${Number(Math.min(...usageSeries).toFixed(1))}-${Number(Math.max(...usageSeries).toFixed(1))} kV`
+          usageRange: `${Number(Math.min(...usageSeries).toFixed(1))}-${Number(Math.max(...usageSeries).toFixed(1))} kVA`
         };
       });
 
@@ -566,21 +566,21 @@ const flexibleControlAreasV2 = computed(() =>
         name: township?.name || zone.townshipKey,
         district: township?.district || "-",
         resourceCount: zone.resourceCount,
-        totalCapacity: `${totalCapacity} kV`,
-        usedCapacity: `${protocolTotal} kV`,
-        reserveCapacity: `${maxAccessValue} kV`,
+        totalCapacity: `${totalCapacity} kVA`,
+        usedCapacity: `${protocolTotal} kVA`,
+        reserveCapacity: `${maxAccessValue} kVA`,
         usageTotalSeries,
         thresholdSeries,
         baselineSeries,
         reduceWindow: minAccessWindowText,
-        buildCap: `${maxAccessValue} kV`,
-        accessRange: `${minAccessValue}-${maxAccessValue} kV`,
+        buildCap: `${maxAccessValue} kVA`,
+        accessRange: `${minAccessValue}-${maxAccessValue} kVA`,
         minAccessWindow: minAccessWindowText,
         strategySummary: "\u4e09\u6761\u66f2\u7ebf\u5206\u522b\u8868\u793a10kV\u8d44\u6e90\u603b\u91cf\u3001\u5df2\u6709\u7ad9\u70b9\u4f7f\u7528\u7535\u529b\u603b\u91cf\u548c\u65b0\u7ad9\u63a5\u5165\u9608\u503c\u66f2\u7ebf\u3002",
-        maxAccessText: `\u65b0\u5efa\u7ad9\u70b9\u6700\u5927\u63a5\u5165\u5efa\u8bae\u6309 ${maxAccessValue} kV \u63a7\u5236\u3002`,
-        reduceText: `${minAccessWindowText} 为民生和已有站点协议用满 ${protocolTotal} kV 的时段，因此建议新站执行最小接入 ${minAccessValue} kV。`,
-        detailText: `新站接入范围最小值取“总量-民生及其他站点协议最大总量”，最大值取“总量-民生及已有站点实际最少使用”，即 ${minAccessValue}-${maxAccessValue} kV。你后续可直接修改 flexibleScenarioInputs 中的总量、协议最大值和使用曲线。`,
-        regionAdvice: `${township?.name || zone.townshipKey} 区域示例按总资源 ${totalCapacity} kV 绘制，民生及已有站点协议最多使用 ${protocolTotal} kV、实际最少使用 ${actualMin} kV，因此新站接入范围建议为 ${minAccessValue}-${maxAccessValue} kV；其中 ${minAccessWindowText} 为从图中读出的“其他负荷用满”时段，新站应执行最小接入。${leadStation} 可作为该区域负荷参考站点。当前阈值最低为 ${minThreshold} kV、最高为 ${maxThreshold} kV。`,
+        maxAccessText: `\u65b0\u5efa\u7ad9\u70b9\u6700\u5927\u63a5\u5165\u5efa\u8bae\u6309 ${maxAccessValue} kVA \u63a7\u5236\u3002`,
+        reduceText: `${minAccessWindowText} 为民生和已有站点协议用满 ${protocolTotal} kVA 的时段，因此建议新站执行最小接入 ${minAccessValue} kVA。`,
+        detailText: `新站接入范围最小值取“总量-民生及其他站点协议最大总量”，最大值取“总量-民生及已有站点实际最少使用”，即 ${minAccessValue}-${maxAccessValue} kVA。`,
+        regionAdvice: `${township?.name || zone.townshipKey} 区域示例按总资源 ${totalCapacity} kVA绘制，民生及已有站点协议最多使用 ${protocolTotal} kVA、实际最少使用 ${actualMin} kVA，因此新站接入范围建议为 ${minAccessValue}-${maxAccessValue} kV；其中 ${minAccessWindowText} 为从图中读出的“其他负荷用满”时段，新站应执行最小接入。${leadStation} 可作为该区域负荷参考站点。当前阈值最低为 ${minThreshold} kV、最高为 ${maxThreshold} kV。`,
         stationStrategies
       };
     })

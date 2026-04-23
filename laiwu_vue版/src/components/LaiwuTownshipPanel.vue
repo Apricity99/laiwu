@@ -269,7 +269,7 @@ const selectedResourceItems = computed(() => {
     stations.length ? Math.min(Math.max(stations.length, 1), 3) : 1
   );
   const pointList = buildResourcePoints(township?.name, resourceCount);
-  const baseName = zone?.resourceName || `${township?.name || ""} 10kV`;
+  const baseName = zone?.resourceName || `${township?.name || ""} 10kVA`;
   const stationCount = stations.length;
 
   if (explicitMappings.length) {
@@ -290,7 +290,7 @@ const selectedResourceItems = computed(() => {
         name: item.name || (resourceCount === 1 ? `${baseName} 资源` : `${baseName} 资源${index + 1}号`),
         townshipKey: township?.key,
         accessMode: item.accessMode || zone?.accessMode || "双间隔接入",
-        reserveCapacity: item.reserveCapacity || `${Number((parseFloat(zone?.reserveCapacity) || 6) / Math.max(explicitMappings.length, 1)).toFixed(1)} kV`,
+        reserveCapacity: item.reserveCapacity || `${Number((parseFloat(zone?.reserveCapacity) || 6) / Math.max(explicitMappings.length, 1)).toFixed(1)} kVA`,
         remark: item.remark || zone?.remark || "当前可支撑多站点协同接入。",
         connectedLabel: item.connectedLabel || connectedStations.map((station) => station.name).join("、") || "暂无",
         value: item.value || pointList[index] || pointList[0],
@@ -317,7 +317,7 @@ const selectedResourceItems = computed(() => {
       name: resourceCount === 1 ? `${baseName} \u8d44\u6e90` : `${baseName} \u8d44\u6e90${index + 1}\u53f7`,
       townshipKey: township?.key,
       accessMode: zone?.accessMode || "\u53cc\u95f4\u9694\u63a5\u5165",
-      reserveCapacity: `${reserveCapacity} kV`,
+      reserveCapacity: `${reserveCapacity} kVA`,
       remark: zone?.remark || "\u5f53\u524d\u53ef\u652f\u6491\u591a\u7ad9\u70b9\u534f\u540c\u63a5\u5165\u3002",
       value: pointList[index],
       connectedStations
